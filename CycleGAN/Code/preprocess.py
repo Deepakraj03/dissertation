@@ -79,6 +79,37 @@ def save_patch(arr: np.ndarray, path: Path) -> None:
     Image.fromarray(arr).save(path, format="PNG", optimize=False)
 
 
+def split_and_move(patches_all: list[Path], out_dir: Path,
+                   splits: dict = SPLITS) -> dict:
+    """Shuffle patches_all and move them into out_dir/{train,val,test} per
+    the given ratios. Returns counts per split. Shared by process_domain
+    (browse-resolution pipeline) and hirise_fullres.py (real-resolution
+    pipeline) so both use identical split behavior."""
+    random.shuffle(patches_all)
+    n = len(patches_all)
+    n_train = int(n * splits["train"])
+    n_val   = int(n * splits["val"])
+
+    split_map = {
+        "train": patches_all[:n_train],
+        "val":   patches_all[n_train:n_train + n_val],
+        "test":  patches_all[n_train + n_val:],
+    }
+
+    for split_name, paths in split_map.items():
+        split_dir = out_dir / split_name
+        split_dir.mkdir(parents=True, exist_ok=True)
+        for p in paths:
+            shutil.move(str(p), split_dir / p.name)
+
+    return {
+        "total_patches": n,
+        "train":         len(split_map["train"]),
+        "val":           len(split_map["val"]),
+        "test":          len(split_map["test"]),
+    }
+
+
 # ── Domain processing ─────────────────────────────────────────────────────────
 
 def process_domain(raw_dir: Path, out_dir: Path, domain: str,
@@ -127,22 +158,7 @@ def process_domain(raw_dir: Path, out_dir: Path, domain: str,
           f"Skipped (low entropy): {skipped_entropy}")
 
     # ── Train / val / test split ──────────────────────────────────────────────
-    random.shuffle(patches_all)
-    n = len(patches_all)
-    n_train = int(n * SPLITS["train"])
-    n_val   = int(n * SPLITS["val"])
-
-    split_map = {
-        "train": patches_all[:n_train],
-        "val":   patches_all[n_train:n_train + n_val],
-        "test":  patches_all[n_train + n_val:],
-    }
-
-    for split_name, paths in split_map.items():
-        split_dir = out_dir / split_name
-        split_dir.mkdir(exist_ok=True)
-        for p in paths:
-            shutil.move(str(p), split_dir / p.name)
+    split_counts = split_and_move(patches_all, out_dir)
 
     # Remove empty staging dir
     tmp_dir = out_dir / "_staging"
@@ -151,10 +167,10 @@ def process_domain(raw_dir: Path, out_dir: Path, domain: str,
 
     return {
         "domain":        domain,
-        "total_patches": n,
-        "train":         len(split_map["train"]),
-        "val":           len(split_map["val"]),
-        "test":          len(split_map["test"]),
+        "total_patches": split_counts["total_patches"],
+        "train":         split_counts["train"],
+        "val":           split_counts["val"],
+        "test":          split_counts["test"],
         "patch_size":    patch_size,
         "stride":        stride,
         "out_dir":       str(out_dir),
