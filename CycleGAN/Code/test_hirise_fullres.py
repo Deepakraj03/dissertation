@@ -245,3 +245,33 @@ def test_process_observation_deletes_scratch_file_on_read_failure(tmp_path, monk
     assert result["patches_saved"] == 0
     # The unreadable scratch file must not be left behind.
     assert list(scratch_dir.iterdir()) == []
+
+
+from hirise_index import Footprint
+from hirise_fullres import select_observations
+
+
+def test_select_observations_filters_region_and_red_jp2():
+    index = {
+        "ESP_IN_REGION_RED": Footprint(
+            obs_id="ESP_IN_REGION_RED", min_lat=17.0, max_lat=18.0,
+            min_lon=-21.0, max_lon=-20.0, projection="EQUIRECTANGULAR",
+            file_name_spec="RDR/ESP/X/ESP_IN_REGION_RED/ESP_IN_REGION_RED_RED.JP2",
+        ),
+        "ESP_IN_REGION_COLOR_ONLY": Footprint(
+            obs_id="ESP_IN_REGION_COLOR_ONLY", min_lat=17.0, max_lat=18.0,
+            min_lon=-21.0, max_lon=-20.0, projection="EQUIRECTANGULAR",
+            file_name_spec="RDR/ESP/X/ESP_IN_REGION_COLOR_ONLY/ESP_IN_REGION_COLOR_ONLY_COLOR.JP2",
+        ),
+        "ESP_OUTSIDE_REGION": Footprint(
+            obs_id="ESP_OUTSIDE_REGION", min_lat=-70.0, max_lat=-69.0,
+            min_lon=100.0, max_lon=101.0, projection="EQUIRECTANGULAR",
+            file_name_spec="RDR/ESP/X/ESP_OUTSIDE_REGION/ESP_OUTSIDE_REGION_RED.JP2",
+        ),
+    }
+    region_cfg = {"lat_min": 16.0, "lat_max": 24.0, "lon_min": -25.0, "lon_max": -15.0}
+
+    result = select_observations(index, region_cfg, n=10)
+
+    assert result == [("ESP_IN_REGION_RED",
+                       "RDR/ESP/X/ESP_IN_REGION_RED/ESP_IN_REGION_RED_RED.JP2")]

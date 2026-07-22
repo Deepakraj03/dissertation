@@ -12,7 +12,10 @@ Usage:
     python hirise_fullres.py --region oxia_planum --n-observations 10
 """
 
+import argparse
+import json
 import random
+import shutil
 import sys
 from pathlib import Path
 
@@ -22,7 +25,9 @@ import rasterio
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from preprocess import entropy, ENTROPY_TH, normalise, save_patch
+from download_hirise import REGIONS, footprint_in_region
+from hirise_index import Footprint, download_index, load_index
+from preprocess import entropy, ENTROPY_TH, normalise, save_patch, split_and_move
 
 RDR_BASE = "https://hirise.lpl.arizona.edu/PDS"
 
@@ -145,3 +150,73 @@ def process_observation(obs_id: str, file_name_spec: str, scratch_dir: Path,
     finally:
         if scratch_path.exists():
             scratch_path.unlink()
+
+
+def select_observations(index: dict[str, "Footprint"], region_cfg: dict,
+                        n: int) -> list[tuple[str, str]]:
+    """Return up to n (obs_id, file_name_spec) pairs whose footprint falls
+    in region_cfg and whose file_name_spec is a real RED JP2 product."""
+    selected = []
+    for obs_id, fp in index.items():
+        if len(selected) >= n:
+            break
+        if not footprint_in_region(fp, region_cfg):
+            continue
+        if real_rdr_url_for(fp.file_name_spec) is None:
+            continue
+        selected.append((obs_id, fp.file_name_spec))
+    return selected
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--region", default="oxia_planum", choices=list(REGIONS.keys()))
+    parser.add_argument("--n-observations", type=int, default=10)
+    parser.add_argument("--target-patches", type=int, default=5000)
+    args = parser.parse_args()
+
+    root = Path(__file__).parent.parent
+    index_dir = root / "Data" / "HiRISE_index"
+    scratch_dir = root / "Data" / "_hirise_fullres_scratch"
+    staging_dir = root / "Data" / "processed" / "hirise" / "_staging"
+    hirise_out_dir = root / "Data" / "processed" / "hirise"
+
+    print("Loading HiRISE footprint index…")
+    index_path = download_index(index_dir)
+    index = load_index(index_path)
+    print(f"Index loaded: {len(index)} observations")
+
+    region_cfg = REGIONS[args.region]
+    targets = select_observations(index, region_cfg, args.n_observations)
+    print(f"Selected {len(targets)} real-RED-JP2 observations in {args.region}")
+
+    manifest = []
+    for obs_id, file_name_spec in targets:
+        print(f"\nProcessing {obs_id}…")
+        result = process_observation(
+            obs_id, file_name_spec, scratch_dir, staging_dir,
+            target_patches=args.target_patches,
+        )
+        print(f"  {result['status']} — {result['patches_saved']} patches")
+        manifest.append(result)
+
+    # Replace the existing (browse-resolution) corpus with the new one.
+    for split in ("train", "val", "test"):
+        split_dir = hirise_out_dir / split
+        if split_dir.exists():
+            shutil.rmtree(split_dir)
+
+    staged_patches = sorted(staging_dir.glob("*.png"))
+    split_counts = split_and_move(staged_patches, hirise_out_dir)
+    print(f"\nFinal split: {split_counts}")
+
+    manifest_path = hirise_out_dir / "hirise_fullres_manifest.json"
+    manifest_path.write_text(json.dumps({
+        "observations": manifest,
+        "split_counts": split_counts,
+    }, indent=2))
+    print(f"Manifest written to {manifest_path}")
+
+
+if __name__ == "__main__":
+    main()
