@@ -16,13 +16,17 @@ venv/
 # Generated data — regenerate via:
 #   CycleGAN/Code/download_hirise.py, download_rover.py, preprocess.py
 #   DiffusionSR/Code/coregister_ctx_hirise.py (needs HiRISE index + CTX tiles)
-CycleGAN/Data/
+# Exceptions: training_log.csv and Data/eval/fid_results.json are tiny
+# provenance records (KBs, not bulk data) and ARE tracked.
+CycleGAN/Data/*
+!CycleGAN/Data/eval/
+CycleGAN/Data/eval/*
+!CycleGAN/Data/eval/fid_results.json
 DiffusionSR/Data/
 
 # Training artifacts (move machine-to-machine via rsync, not git)
 CycleGAN/checkpoints/
 CycleGAN/logs/
-CycleGAN/training_log.csv
 
 # LaTeX build byproducts (regenerate from .tex/.bib via latexmk/bibtex)
 Literature review/*.aux
