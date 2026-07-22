@@ -1,0 +1,35 @@
+# Dev tooling local-only settings (machine-specific permission grants)
+.devtool/settings.local.json
+
+# LibreOffice lock files
+.~lock.*#
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Generated data — regenerate via:
+#   CycleGAN/Code/download_hirise.py, download_rover.py, preprocess.py
+#   DiffusionSR/Code/coregister_ctx_hirise.py (needs HiRISE index + CTX tiles)
+CycleGAN/Data/
+DiffusionSR/Data/
+
+# Training artifacts (move machine-to-machine via rsync, not git)
+CycleGAN/checkpoints/
+CycleGAN/logs/
+CycleGAN/training_log.csv
+
+# LaTeX build byproducts (regenerate from .tex/.bib via latexmk/bibtex)
+Literature review/*.aux
+Literature review/*.bbl
+Literature review/*.blg
+Literature review/*.log
+Methodology/*.aux
+Methodology/*.bbl
+Methodology/*.blg
+Methodology/*.log

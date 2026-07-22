@@ -1,0 +1,843 @@
+\documentclass[10pt,journal]{IEEEtran}
+
+% ── Packages ─────────────────────────────────────────────────────────────────
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{microtype}
+\usepackage{url}
+\usepackage[T1]{fontenc}
+\usepackage{xcolor}
+\usepackage{balance}
+
+% ── Metadata ──────────────────────────────────────────────────────────────────
+\title{Generative Modelling for Realistic Mars Landing Site Visualisation:\\
+       A Critical Survey of the Enabling Literature}
+
+\author{%
+  \IEEEauthorblockN{Deepakraj Rajmohan}\\
+  \IEEEauthorblockA{\textit{Msc in Artificial Intelligence}\\
+  University of Surrey\\
+  deepak.dr036@gmail.com}
+}
+
+\markboth{Literature Review}{}
+
+% =============================================================================
+\begin{document}
+\maketitle
+
+% ── Abstract ─────────────────────────────────────────────────────────────────
+\begin{abstract}
+Preparing rover operators for planetary surface missions demands photorealistic
+virtual training environments that replicate the target landing site at the
+resolution rover cameras actually deliver. For Mars, the highest-resolution
+orbital resource is the High Resolution Imaging Science Experiment (HiRISE) at
+25\,cm/pixel in nadir view, whereas rover cameras resolve sub-millimetre surface
+texture from near-grazing perspective angles, a gap of roughly three orders of
+magnitude that standard single-image super-resolution methods, which upscale at
+most $4\times$, cannot close. This review critically examines twenty publications
+spanning single-image super-resolution, image-to-image domain translation,
+digital terrain model generation, neural radiance field rendering, and virtual
+reality reconstruction, evaluating each against the specific challenge of
+synthesising rover-perspective surface textures from nadir orbital imagery for
+mission training simulation. The analysis shows that while each sub-field has
+advanced substantially since 2021 transformer-based and diffusion-based
+super-resolution outperform earlier GAN methods; NeRF representations of Mars
+surface have been demonstrated from rover imagery; and physics-constrained
+generative networks reduce terrain reconstruction error by more than
+50\% no published method jointly addresses the view-angle transformation and
+high-fidelity texture synthesis within a single framework. The three primary
+barriers are the absence of aligned cross-view training data, the documented
+risk of hallucination in diffusion-model outputs for mission-critical
+visualisations, and the computational cost of diffusion-based synthesis at
+orbital-to-rover scale. These findings delineate the specific research gap that
+motivates the proposed dissertation.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Mars surface imagery, super-resolution, image-to-image translation, neural
+radiance fields, digital terrain models, diffusion models, virtual reality
+simulation, HiRISE, domain adaptation, planetary exploration
+\end{IEEEkeywords}
+
+% =============================================================================
+\section{Introduction}
+\label{sec:intro}
+
+Successful deployment of a planetary rover begins not with launch, but with
+exhaustive ground simulation. The ESA ExoMars Rosalind Franklin Mission (RFM),
+targeting Oxia Planum as its landing site, requires training environments
+sufficiently faithful to the actual terrain to rehearse traverse planning,
+instrument operations, and hazard response. Virtual reality (VR) satisfies this
+requirement in principle, but its operational value collapses when surface
+textures become visually implausible. A crew navigating a smoothed, geometrically
+approximate mesh is not rehearsing the same perceptual and decision-making
+conditions it will face on the ground. The environment must look like Mars at
+the scale rover cameras can actually resolve.
+
+The core difficulty is a data paradox embedded in planetary imaging architecture.
+The highest-resolution orbital survey instrument on Mars is the High Resolution
+Imaging Science Experiment (HiRISE) aboard NASA's Mars Reconnaissance Orbiter,
+which acquires imagery at 25--50\,cm/pixel in a nadir (directly downward)
+viewing geometry~\cite{tao2021madnet}. The ExoMars Trace Gas Orbiter's Colour
+and Stereo Surface Imaging System (CaSSIS) provides broader multi-spectral
+coverage at a coarser 4--5\,m/pixel~\cite{tao2021cassis}. The
+Mastcam-Z (Rover camera) aboard NASA's Perseverance rover being the most capable current
+example resolve individual regolith grains at sub-millimetre scale from a
+vantage point roughly 2\,m above the surface, looking across it at oblique
+angles. The gap between HiRISE's 25\,cm/pixel and sub-millimetre rover
+resolution spans approximately three orders of magnitude in linear scale, or
+six orders of magnitude in area. Current single-image super-resolution (SISR)
+methods reduce this gap by at most a factor of four~\cite{tao2021cassis},
+leaving it essentially intact.
+
+Resolution alone, however, does not capture the full dimensionality of the
+problem. A nadir HiRISE image of a boulder field depicts the horizontal top
+surfaces of rocks. A rover standing 10\,m away sees the same boulders in
+perspective: vertical faces, shadows cast across the regolith floor, and the
+parallax between foreground grains and background outcrops. Upsampling a
+nadir image, however aggressively, cannot hallucinate these perspective-view
+features because they are geometrically absent from the input. The view-angle
+transformation from nadir to perspective requires inferring three-dimensional
+surface geometry from two-dimensional orbital reflectance data and re-rendering
+that geometry from a different camera position is a problem that SR, by
+construction, does not address.
+
+This review surveys twenty publications across seven thematic areas, assessing
+each against the specific research requirement: generating rover-perspective
+surface texture from nadir orbital imagery at VR-grade fidelity for pre-mission
+simulation. The seven thematic areas are:
+\begin{enumerate}
+  \item Orbital imaging systems and Mars data characterisation;
+  \item Single-image super-resolution for planetary remote sensing;
+  \item Image-to-image translation frameworks applicable to view-domain bridging;
+  \item Monocular digital terrain model (DTM) generation from orbital imagery;
+  \item Neural radiance field (NeRF) and Gaussian splatting methods applied to
+        Mars;
+  \item Virtual reality reconstruction pipelines for planetary mission
+        simulation;
+  \item Hallucination and epistemic reliability in generative models used for
+        scientific inference.
+\end{enumerate}
+The critical finding, developed throughout the analysis, is that no published
+method and no obvious composition of published methods, closes the
+nadir-orbital to rover-perspective gap within a single trainable framework.
+The dissertation work targets precisely this gap.
+
+% =============================================================================
+\section{Taxonomy and Conceptual Framework}
+\label{sec:taxonomy}
+
+The literature reviewed here does not constitute a unified research programme.
+It comprises several independently advancing communities like remote sensing image
+processing, computer vision generative modelling, planetary science, and VR
+engineering whose outputs are jointly necessary to the downstream VR synthesis
+requirement without any of them addressing it explicitly. Three axes organise the
+territory.
+
+The first axis is \textit{spatial view}: methods operate in the nadir domain
+(orbital, top-down), the perspective domain (rover, oblique), or across both.
+The second axis is \textit{task type}: methods either enhance existing imagery
+(super-resolution, inpainting), translate between domains (image-to-image
+translation, domain adaptation), or recover and render geometric structure (DTM
+generation, NeRF, Gaussian splatting). The third axis is \textit{output
+modality}: visual RGB texture, elevation/depth maps, or rendered video sequences.
+
+Seven clusters emerge from this structure. \textbf{Cluster~1} (Orbital data
+characterisation) establishes baseline understanding of Mars instrument
+capabilities and their information limits~\cite{serrano2013hirise,
+osadnik2025mcted}. \textbf{Cluster~2} (Nadir SR) comprises methods that upscale
+orbital images while remaining in the nadir domain~\cite{tao2021cassis,
+wu2024rstsrn, lu2025thermal, khanna2024diffusionsat, zhu2025taming}.
+\textbf{Cluster~3} (Image-to-image translation) contains domain-agnostic
+frameworks that map between arbitrary distributions and could, in principle,
+translate nadir to perspective~\cite{kim2024unsb, xiao2025brownian}.
+\textbf{Cluster~4} (Monocular DTM) covers methods that infer 3D topography from
+single orbital images~\cite{tao2021madnet, zou2026pfmgan, cao2024gen3d}.
+\textbf{Cluster~5} (Neural rendering) encompasses NeRF and Gaussian splatting
+methods applied to Mars scenes~\cite{giusti2022marf, li2025martian,
+dealmeida2025neural3d, martinezpetersen2025hifi, paul2025nerfspace}.
+\textbf{Cluster~6} (VR reconstruction) covers end-to-end pipelines targeting
+mission simulation environments~\cite{catalano2025inpainting, li2025martian}.
+\textbf{Cluster~7} (Reliability) analyses hallucination and epistemic validity
+in generative scientific models~\cite{aithal2024hallucination,
+rathkopf2025reliability}.
+
+The gap between Cluster~2 and Cluster~5 is the primary concern of this
+dissertation. Nadir SR methods keep the viewpoint fixed; neural rendering
+methods require perspective imagery as input. No reviewed method translates from
+nadir to perspective in a way that synthesises rover-viewable texture from
+orbital data. This structural gap is not an oversight in the literature; it
+reflects the distinct communities that have developed these tools and the absence
+of a formal problem statement that spans both.
+
+% =============================================================================
+\section{Critical Analysis of the Literature}
+\label{sec:analysis}
+
+\subsection{The Orbital Data Landscape and Its Inherent Constraints}
+\label{subsec:data}
+
+HiRISE provides the sharpest available view of the Martian surface from orbit,
+yet its coverage is drastically limited. Fewer than 3\% of the Martian surface
+has been imaged at 25\,cm/pixel resolution, because the instrument's 6\,km swath
+width and the competing demands of the science team constrain acquisition
+rates~\cite{tao2021madnet}. CaSSIS covers broader areas at 4--5\,m/pixel, and
+the Context Camera (CTX) on MRO provides near-global coverage at 6\,m/pixel.
+Each instrument occupies a distinct rung in the resolution hierarchy, and the
+gulf between even the finest orbital product and rover cameras remains
+unbridged regardless of which instrument is the starting point.
+
+Serrano \textit{et al.}~\cite{serrano2013hirise} expose a revealing consequence
+of this hierarchy. The paper trains a Bayesian network to infer HiRISE-equivalent
+rock density, a key landing hazard metric from coarser CTX image features,
+incorporating geomorphic unit labels as prior information. The model succeeds in
+probabilistic density estimation but does so without reconstructing surface
+\textit{appearance}: it predicts rock abundance, not rock texture or shape. This
+is not a design limitation; it is a statement about information content. CTX
+pixels do not contain the sub-pixel spectral and spatial variation from which
+HiRISE-equivalent visual texture could be deterministically reconstructed. Any
+generative model that attempts to synthesise rover-scale visual texture from
+nadir orbital imagery faces the same information-theoretic constraint. The
+synthesis is necessarily generative and grounded in statistical priors rather
+than purely reconstructive.
+
+Osadnik \textit{et al.}~\cite{osadnik2025mcted} respond to data scarcity by
+releasing MCTED, comprising 80,898 paired CTX orthoimage--digital elevation
+model (DEM) samples derived from the Day \textit{et al.} processing pipeline,
+with tooling to handle common artefacts and missing-data regions. The contribution
+is genuine: standardised, ML-ready paired data has been conspicuously absent from
+Mars terrain modelling research, and MCTED provides a reproducible training
+benchmark. Its limitation, from the perspective of this dissertation, is
+structural: the pairs link nadir images to elevation maps, not nadir images to
+perspective views. A dataset providing the same surface patch in both nadir
+orbital and rover perspective at aligned resolution does not yet exist, and its
+absence constrains every approach in Clusters~3 and 5 as much as it constrains
+novel methods.
+
+\subsection{Super-Resolution for Planetary Remote Sensing}
+\label{subsec:sr}
+
+SR research on planetary imagery has progressed through three generations since
+2021: GAN-based methods modelled closely on terrestrial benchmarks, attention and
+transformer architectures that better capture long-range spatial dependencies, and
+diffusion-based synthesis that trades pixel-level reconstruction accuracy for
+perceptual realism.
+
+\subsubsection{GAN-Based SR}
+
+Tao \textit{et al.}~\cite{tao2021cassis} propose MARSGAN, an enhancement of
+ESRGAN incorporating adaptive-weighted residual dense blocks (AW-RRDB) with
+Gaussian noise injection and a multi-scale reconstruction scheme that uses
+pixel-shuffling to suppress checkerboard artefacts. Trained exclusively on
+HiRISE images and applied at inference to CaSSIS tiles, MARSGAN achieves
+approximately $3\times$ effective resolution improvement, reducing apparent CaSSIS
+resolution from 4--5\,m/pixel to roughly 1.3\,m/pixel. The work is evaluated
+across eight geologically diverse Mars science sites including the Mars 2020
+Perseverance landing site at Jezero Crater. Notably, however, the evaluation is
+entirely qualitative, no PSNR or SSIM scores are reported. This is not merely a
+presentation choice. Co-registering CaSSIS and HiRISE acquisitions of the same
+location precisely enough for pixel-level comparison is non-trivial given the
+instruments' different viewing geometries, acquisition times, and spatial
+sampling. The qualitative approach is honest but leaves cross-method performance
+comparison opaque, a problem that recurs throughout this sub-field.
+
+\subsubsection{Transformer-Based SR}
+
+Wu \textit{et al.}~\cite{wu2024rstsrn} address SR at $\times$2, $\times$4, and
+$\times$8 magnification through RSTSRN, which extends LapSRN's Laplacian
+pyramid architecture with recursive Swin Transformer attention blocks.
+The recursive strategy processes a single input through shared attention weights
+at multiple scales, reducing parameter count while expanding the effective
+receptive field. On Mars image benchmarks, RSTSRN improves upon LapSRN by
+0.35\,dB PSNR at $\times$2, 0.88\,dB at $\times$4, and 1.22\,dB at $\times$8,
+with corresponding SSIM gains of 0.0048, 0.0114, and 0.0149, and outperforms
+competing transformer architectures including SwinIR. The improvement at higher
+scale factors is the most operationally relevant finding: the larger the SR
+factor, the more the texture generation task resembles free synthesis rather than
+reconstruction, and transformer self-attention mechanisms are better equipped
+than convolutional filters to maintain long-range consistency across
+synthesised regions. The critical flaw is that evaluation uses bicubic
+downsampling to generate low-resolution inputs from the original images, then
+measures reconstruction against those originals. This protocol assesses recovery
+from one specific degradation model. Real CaSSIS or CTX pixels do not
+approximate bicubically downsampled HiRISE, they emerge from a physically
+distinct optical system with its own point spread function, noise floor, and
+spectral response. The trained model has never encountered the actual low-to-high
+resolution relationship it is meant to solve.
+
+\subsubsection{Diffusion-Based SR and Generative Foundation Models}
+
+Khanna \textit{et al.}~\cite{khanna2024diffusionsat} step back from
+Mars-specific engineering to propose DiffusionSat, a generative foundation model
+for satellite imagery broadly. Trained on a heterogeneous collection of public
+remote sensing datasets including NAIP (1\,m/pixel aerial imagery of the USA),
+xView, FMOW, and SpaceNet, DiffusionSat conditions generation on geolocation
+metadata and sensor parameters through a 3D positional encoding scheme applied to
+the diffusion model's conditioning stack. The model achieves competitive FID scores
+on multi-sensor satellite image generation tasks and demonstrates, crucially, that
+a single diffusion model can generalise across diverse Earth observation sensors
+without sensor-specific fine-tuning. The indirect relevance to Mars is significant:
+DiffusionSat shows that multi-sensor domain generalisation is tractable within a
+diffusion framework. Its failure mode for Mars is equally clear: its training
+corpus contains no Mars data; its geolocation conditioning assumes Earth
+coordinates; and its multi-spectral handling assumes terrestrial atmospheric
+spectral profiles. Transferring DiffusionSat to Mars would require either
+large-scale domain fine-tuning or an architectural reformulation of the metadata
+conditioning that replaces Earth-specific priors with Martian photometric models.
+
+Zhu \textit{et al.}~\cite{zhu2025taming} address a tension that DiffusionSat
+sidesteps: unconditional diffusion models generate perceptually sharp outputs but
+diverge from pixel-level ground truth, while deterministic regression models
+achieve high PSNR at the cost of blurred high-frequency texture. Their approach
+introduces a frequency-decomposition conditioning mechanism that anchors the
+diffusion denoising trajectory to low-frequency structural content from the input,
+allowing high-frequency texture to be generated stochastically without
+compromising large-scale geometry. Evaluated on the DOTA and DIOR-R aerial
+imagery benchmarks at $\times$4 SR, the method improves PSNR over prior
+diffusion SR methods while maintaining competitive FID scores. For Mars
+applications, the architectural insight translates directly: any synthesis pipeline
+that must preserve large-scale geomorphology (crater rims, dune crests, valley
+networks) while generating sub-metre surface texture will encounter exactly
+this fidelity-perceptual realism trade-off, and frequency decomposition offers
+a principled way to navigate it.
+
+Lu and Su~\cite{lu2025thermal} take a multi-source fusion approach to SR on Mars
+thermal infrared imagery from the THEMIS instrument. By fusing visible-channel
+orbital images and MOLA topographic data to guide thermal channel upsampling,
+the method leverages the complementary spatial information carried by each
+modality. The approach demonstrates measurable PSNR gains on THEMIS data.
+Its relevance to the dissertation is indirect: thermal imagery is not the visual
+RGB texture domain required for photorealistic VR, and the multi-source fusion
+strategy while promising requires co-registered multi-modal data at the
+inference site, which may not be uniformly available across candidate Mars landing
+areas.
+
+Collectively, the SR literature demonstrates that $\times$4 resolution enhancement
+of orbital Mars imagery is achievable with GAN, transformer, or diffusion
+backbones, and that diffusion-based methods best handle the texture stochasticity
+of geological surfaces. However, $\times$4 closes a factor-of-four fraction of a
+three-order-of-magnitude gap. More fundamentally, every reviewed SR method
+operates nadir-to-nadir: the input is an orbital image; the output is a
+higher-resolution orbital image. The perspective transformation that converts
+nadir imagery into what a rover would see is nowhere addressed.
+
+\subsection{Image-to-Image Translation as a Domain-Bridging Mechanism}
+\label{subsec:i2i}
+
+Image-to-image translation methods map entire image domains to each other, a
+capability structurally better suited to the nadir-to-perspective view
+transformation than SR, which merely sharpens detail within a fixed viewpoint.
+Two principled frameworks appear in the reviewed literature, both grounded in
+stochastic differential equation (SDE) dynamics.
+
+Kim \textit{et al.}~\cite{kim2024unsb} propose UNSB (Unpaired Neural
+Schr{\"o}dinger Bridge), which reframes unpaired domain translation as learning
+an SDE that transports samples from one arbitrary distribution to another. Unlike
+standard diffusion models, which route data through a Gaussian noise prior and
+back, the Schr{\"o}dinger Bridge transports directly between two target
+distributions. This eliminates the Gaussian prior assumption that forces standard
+diffusion I2I methods to destroy domain-specific structure before rebuilding it.
+UNSB addresses the scalability of the Schr{\"o}dinger Bridge formulation by
+decomposing the SDE into a sequence of adversarial sub-problems, allowing
+high-resolution unpaired I2I to succeed where prior SB formulations stalled.
+On standard benchmarks including horse-to-zebra, cat-to-dog, summer-to-winter,
+and day-to-night translations, UNSB achieves lower FID than CycleGAN, CUT, and
+related methods. The architecture is compelling for the Mars nadir-to-perspective
+problem precisely because it operates on unpaired data: a source domain of
+HiRISE nadir patches and a target domain of rover perspective images are both
+available, and they do not need to be geographically co-registered. However,
+UNSB has been evaluated only on natural image colour-domain translations. The
+photometric differences between a nadir view and a perspective view of the
+same Mars surface far exceed the hue and seasonal saturation shifts of the tested
+benchmarks; they involve changes in shadow geometry, rock face visibility,
+foreshortening, and inter-object occlusion. All of which require implicit 3D
+reasoning that the SDE formulation does not explicitly encode.
+
+Xiao \textit{et al.}~\cite{xiao2025brownian} address the complementary problem:
+stochastic I2I methods produce different outputs from the same input on
+successive runs, which is unacceptable in scientific visualisation. Their
+Dual-approx Bridge exploits Brownian bridge dynamics with two separate neural
+approximators, one for the forward noising process, one for the reverse to
+achieve deterministic I2I: the same input produces the same output every time.
+On paired image generation and super-resolution benchmarks, Dual-approx Bridge
+achieves superior SSIM and LPIPS compared to stochastic diffusion I2I baselines
+while maintaining image fidelity comparable to the ground truth. Determinism
+matters greatly in the Mars context: if two planetary scientists run the same
+generation pipeline and obtain different reconstructions of the same surface
+patch, neither output can be used as mission-planning ground truth. Dual-approx
+Bridge provides the architectural template for a reproducible synthesis system,
+though, like UNSB, it has not been applied to remote sensing or view-angle
+translation tasks.
+
+The gap here is categorical rather than incremental. No I2I method has been
+applied to the nadir-to-perspective Mars translation problem. Neither framework
+has been tested on remote sensing imagery. The photometric complexity of the
+view-angle transformation is qualitatively different from the colour and seasonal
+domain shifts these methods were designed and benchmarked on. Whether SB-based
+I2I is expressive enough to capture geometry-dependent viewpoint changes or
+whether a geometry-aware architecture is necessary remains an open empirical
+question.
+
+\subsection{Digital Terrain Model Generation from Monocular Orbital Imagery}
+\label{subsec:dtm}
+
+DTM generation from orbital imagery occupies a structurally intermediate
+position: it extracts 3D geometric information from nadir images, which is a
+necessary precursor to perspective-view synthesis but does not itself complete
+the journey to VR-ready visual texture.
+
+Tao \textit{et al.}~\cite{tao2021madnet} present MADNet~2.0, which retrieves
+pixel-scale topography from a single HiRISE image by exploiting photoclinometric
+cues, the relationship between pixel intensity, surface slope, and sun angle
+at acquisition. A deep learning model trained on paired HiRISE image--MOLA
+altimetry data infers a dense elevation map at HiRISE's native 25\,cm/pixel
+resolution. This monocularity is the key engineering advantage: stereo-based
+DTM generation requires two overlapping acquisitions of the same location, which
+covers less than 1\% of the HiRISE archive; MADNet~2.0 operates on any
+single-strip observation. The limitation for VR is categorical: the DTM provides
+surface geometry, not surface appearance. Rocks with identical elevation profiles
+but different mineralogy, grain size, or weathering state produce entirely
+different visual textures, none of which MADNet~2.0 recovers.
+
+Zou \textit{et al.}~\cite{zou2026pfmgan} address the photometric ambiguity
+that confounds DTM generation through PFMGAN, which integrates an explicit solar
+geometry model and an albedo-aware attention module into a GAN architecture. By
+modelling how sun angle and surface albedo interact with topography to produce
+the observed shading, PFMGAN reduces the confusion between shading caused by
+slope and shading caused by reflectance variation. Evaluated on five Martian
+landform classes (impact craters, aeolian dunes, lava flow fields, valley
+networks, and plains), PFMGAN delivers more than 50\% RMSE reduction over
+baselines across all landform types, with superior performance maintained across
+spatial scales from 0.25 to 6\,m/pixel. The albedo-aware mechanism is directly
+transferable to the dissertation problem: any generative method that synthesises
+perspective-view surface appearance from nadir orbital data must similarly
+disentangle shading caused by geometry from shading caused by intrinsic surface
+properties. PFMGAN demonstrates this disentanglement is learnable from data
+with appropriate physical constraints, providing a strong architectural prior.
+
+Cao \textit{et al.}~\cite{cao2024gen3d} adopt a conditional GAN that maps
+HiRISE orthorectified images to dense DEMs trained on paired HiRISE
+orthoimage--DEM data at 2\,m and 0.25\,m resolution. Evaluation over four
+geographically distinct Mars regions demonstrates height consistency between
+predicted DEMs and stereo-derived HiRISE ground truth. The approach is closest
+in spirit to the dissertation requirement: nadir imagery as input, a 3D
+representation as output. However, the output is an elevation map, not a
+perspective-rendered visual texture, and the evaluation geography is limited to
+four areas with available stereo-based validation data.
+
+Together, Cluster~4 establishes that the geometric component of the problem 
+inferring surface shape from nadir images is tractable with physics-informed
+deep learning. The component that remains unaddressed is rendering: given a
+recovered surface geometry, synthesising what that surface would look like from
+a rover's perspective, with correct photometric properties, realistic regolith
+texture, and physically plausible shadows.
+
+\subsection{Neural Scene Rendering for Martian Environments}
+\label{subsec:nerf}
+
+Neural Radiance Fields (NeRF)~\cite{paul2025nerfspace} represent a departure
+from image-space processing: rather than enhancing or translating 2D images, NeRF
+methods optimise a continuous volumetric scene function from which any viewpoint
+can be rendered. This makes NeRF architecturally capable of the view-angle
+transformation that SR and I2I methods cannot perform.
+
+Giusti \textit{et al.}~\cite{giusti2022marf} demonstrate this capability in
+MaRF, which applies NeRF to multi-image collections from the Curiosity rover at
+Gale Crater. MaRF confirms that NeRF training converges on Martian imagery
+despite the unusual photometric environment (persistent dust haze, low solar
+elevation, high iron oxide spectral contrast), producing novel view synthesis
+with PSNR and SSIM scores competitive with standard NeRF baselines on Earth
+scenes. The work establishes Mars rover imagery as a viable NeRF training
+domain. Its operational limitation is fundamental: MaRF requires multiple
+overlapping rover images of the \textit{same surface patch} as input. For the
+ExoMars RFM problem, real images of Oxia Planum do not yet exist, they will be
+acquired after deployment. Any pre-mission VR training environment must
+synthesise the rover-perspective view, not reconstruct it from data the rover
+has not yet taken.
+
+Li \textit{et al.}~\cite{li2025martian} extend neural Mars rendering into a
+complete simulation pipeline through the Martian World Model system, comprising
+two components. The M3arsSynth data engine processes NASA stereo navigation
+imagery from Curiosity into a multimodal dataset of over 10,000 video clips
+annotated with depth maps, surface normal estimates, and text descriptions.
+The MarsGen video diffusion model, trained on this dataset, generates
+controllable Martian landscape videos conditioned on text prompts, navigation
+maps, and depth inputs. Experimental results demonstrate that MarsGen surpasses
+video synthesis models trained on terrestrial datasets in terms of visual fidelity
+and 3D structural consistency, confirming that domain-specific Mars training data
+provides significant advantage over transfer from Earth imagery. MarsGen is the
+most operationally complete system reviewed: it targets mission rehearsal and
+robotic simulation as explicit use cases, and its controllable generation
+addresses the requirement that operators can explore different traverse paths
+in VR. Its limitation is the same as MaRF's, but at larger scale: the entire
+training corpus is derived from rover perspective imagery. Terrain not previously
+visited by any rover which encompasses virtually all of Mars outside four
+landing sites, lies entirely outside MarsGen's generative support.
+
+De Almeida \textit{et al.}~\cite{dealmeida2025neural3d} address a
+geometrically adjacent problem: 3D reconstruction from descent-phase wide-angle
+imagery. The descent trajectory provides a sequence of images spanning nadir to
+oblique angles, but with strong radial distortion and limited baseline. The
+paper demonstrates that an implicit neural height field representation
+outperforms classical multi-view stereo (MVS) under these near-nadir, low-parallax
+conditions, as the continuous surface prior suppresses depth estimation noise
+that MVS accumulates. Evaluated on simulated descent sequences over high-fidelity
+lunar and Mars terrain models, the neural approach achieves better RMSE across
+a range of terrain roughness levels. This result matters for the dissertation in
+a specific way: it demonstrates that neural representations with strong surface
+priors can perform competitively in near-nadir imaging regimes where classical
+geometric methods fail. If such representations could be coupled to a texture
+synthesis module, the path from nadir orbital imagery to a rendered perspective
+scene might run through an intermediate neural height-field representation
+rather than through explicit 3D mesh construction.
+
+Mart{\'i}nez-Petersen \textit{et al.}~\cite{martinezpetersen2025hifi} integrate
+NeRF and Gaussian Splatting within a ROS~2-compatible pipeline that processes
+raw rover rosbag recordings into dense photorealistic 3D reconstructions. The
+key engineering contribution is Gaussian Splatting's render-time advantage: once
+trained, a Gaussian scene representation renders at interactive frame rates
+sufficient for real-time VR, unlike NeRF's ray-marching inference which requires
+seconds per frame. The system requires perspective-view rover images as its
+input; no mechanism is proposed or evaluated for deriving the Gaussian scene
+from orbital data. The finding that Gaussian Splatting achieves VR-compatible
+render rates is directly relevant to the dissertation's output target, however,
+as it defines the representation format that the proposed nadir-to-perspective
+synthesis pipeline should produce.
+
+Paul \textit{et al.}~\cite{paul2025nerfspace} provide a comprehensive survey of
+NeRF in space applications, identifying terrain mapping, navigation path planning,
+and mission simulation as the three primary use cases. The survey notes that
+existing NeRF methods in space contexts uniformly require multi-view imagery as
+input either rover camera collections or descent image sequences and that the
+problem of synthesising a NeRF from a single nadir orbital image has not been
+addressed. This negative finding, reached by the most thorough treatment of the
+topic, affirms the novelty of the proposed research direction.
+
+\subsection{Virtual Reality Reconstruction and Mission Simulation}
+\label{subsec:vr}
+
+Catalano and Soccini~\cite{catalano2025inpainting} address a practical obstacle
+in Martian VR construction: the heightmaps derived from CTX stereo and MOLA
+altimetry contain systematic voids arising from instrument shadow, data dropout
+during transmission, and incomplete orbital coverage. The proposed diffusion
+model is trained on Mars terrain data and conditioned on the boundary of each
+void region to inpaint missing elevation values in a structurally consistent
+manner. Evaluation using SSIM and MS-SSIM against held-out regions of known
+terrain demonstrates performance gains of up to 15\% in RMSE and 81\% in
+perceptual LPIPS score over classical interpolation and prior deep learning
+baselines. The approach genuinely improves heightmap completeness for VR terrain
+meshes.
+
+What the method does not produce is surface colour texture. A completed heightmap
+defines the shape of the terrain mesh but assigns no RGB value to its vertices.
+A VR environment built from inpainted heightmaps alone renders as a smooth,
+textureless 3D surface: geometrically faithful but visually sterile and
+photometrically unrepresentative of what a rover operator would actually see.
+Texture synthesis, the step that converts a geometric skeleton into a
+photorealistic surface is acknowledged but not performed. The paper explicitly
+positions itself as addressing the geometry sub-problem, leaving the texture
+synthesis challenge open.
+
+Li \textit{et al.}~\cite{li2025martian} offer the architecturally most complete
+VR simulation pipeline, but its dependence on rover perspective imagery as its
+data substrate limits applicability to the four small geographic areas where
+rover navigation cameras have operated. Pre-deployment simulation for Oxia
+Planum, a site no rover has visited, lies outside its capability regardless of
+generation quality.
+
+\subsection{Hallucination and Epistemic Reliability of Generative Models}
+\label{subsec:hallucination}
+
+Every generative model reviewed in the preceding sections can, in principle,
+produce plausible-looking surface features that have no basis in the underlying
+physical reality. In natural image applications, invented texture is a quality
+attribute. In mission-critical planetary science, a synthesised boulder that does
+not exist or the absence of a real boulder that was not hallucinated which has
+direct consequences for traversability assessment and crew safety.
+
+Aithal \textit{et al.}~\cite{aithal2024hallucination} provide the most
+systematic empirical analysis of this failure mode, identifying \textit{mode
+interpolation} as its proximate mechanism. Diffusion models approximate the score
+function of the training data distribution with a smooth neural network. When the
+training distribution contains two distinct modes in close proximity for instance,
+two crater morphologies that differ in ejecta structure. The smooth approximation
+assigns non-zero probability to interpolated samples between those modes, which
+never appeared in training data. Through controlled experiments on synthetic 2D
+distributions and artificial image datasets, the paper shows that these
+interpolated samples constitute hallucinations: the model synthesises features
+that are statistically plausible under its learned score function but have no
+physical referent in reality. Experiments on real-world image datasets confirm
+the phenomenon at scale. In the Mars texture synthesis context, this means a
+diffusion model trained on HiRISE imagery might synthesise impact crater rims
+with morphologies that do not correspond to any crater at the target site,
+aeolian ripple wavelengths inconsistent with the local wind regime, or rock
+textures blending properties of geologically distinct surface units. The scale
+of this risk is not bounded by model quality alone; it is a structural property
+of smooth function approximation on multi-modal distributions.
+
+Rathkopf~\cite{rathkopf2025reliability} reframes the hallucination problem as
+an epistemological question: under what conditions can scientists rely on
+generative model outputs for scientific inference? His answer draws on case
+studies of AlphaFold~3 (protein structure prediction) and GenCast (atmospheric
+modelling). In both cases, hallucination risk is converted to bounded,
+quantifiable risk through two mechanisms: theory-guided training, where domain
+physical laws impose constraints that prevent the model from generating
+physically impossible outputs; and confidence-based error screening, where
+uncertainty estimates flag outputs that should not be used for downstream
+decisions. Rathkopf argues that generative models embedded in such structured
+workflows support reliable scientific inference despite their opacity, provided
+they operate in theoretically mature domains.
+
+The implication for Mars texture synthesis is a concrete design requirement.
+A generation pipeline that incorporates physical priors Mars solar irradiance
+models, photometric functions for basaltic regolith, crater morphology
+distributions derived from impact physics, and aeolian depositional
+constraints cannot hallucinate a surface feature that violates those priors,
+because the physics-violation incurs training loss. The dissertation must
+therefore treat physical constraint not as an optional enhancement but as a
+primary mechanism for bounding hallucination risk to scientifically acceptable
+levels.
+
+% =============================================================================
+\section{Quantitative Synthesis and Comparative Analysis}
+\label{sec:synthesis}
+
+Table~\ref{tab:comparison} consolidates the twenty reviewed publications across
+seven comparative dimensions: publication year, methodological approach, task
+category, input-to-output view transformation, key reported performance metric,
+whether the method was evaluated on Mars-specific data, and the core limitation
+that prevents direct application to the nadir-to-rover-perspective VR synthesis
+problem.
+
+\begin{table*}[!t]
+\caption{Comparative Overview of Reviewed Literature Against the Nadir-to-Rover-Perspective VR Synthesis Problem.
+  Task codes: SR = super-resolution; I2I = image-to-image translation;
+  DTM = digital terrain model generation; NeRF/GS = neural radiance field / Gaussian splatting;
+  VR = VR reconstruction pipeline; Data = dataset contribution; Theory = theoretical analysis;
+  Review = survey. View codes: N = nadir/orbital; P = perspective/rover; 3D = 3D representation;
+  VR\textsubscript{H} = VR heightmap; ``Any'' = domain-agnostic.}
+\label{tab:comparison}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}p{0.45cm}lp{2.0cm}p{0.85cm}p{1.15cm}p{3.4cm}lp{4.4cm}@{}}
+\toprule
+\textbf{Ref.} & \textbf{Year} & \textbf{Method} & \textbf{Task} &
+\textbf{View (I$\to$O)} & \textbf{Key Result} & \textbf{Mars?} &
+\textbf{Core Limitation for VR Synthesis} \\
+\midrule
+
+\cite{tao2021cassis}    & 2021 & MARSGAN (AW-RRDB)             & SR      & N$\to$N   & ${\approx}3\times$ SR on CaSSIS; 8 sites, qualitative          & Yes     & No quantitative metric; nadir output only; ${\approx}1.3$\,m/pixel residual gap \\
+\cite{wu2024rstsrn}     & 2024 & RSTSRN                        & SR      & N$\to$N   & ${\times}4$ SR; $+$0.88\,dB PSNR vs.\ LapSRN (${\times}4$)   & Yes     & Evaluated on bicubic degradation; real sensor PSF not modelled \\
+\cite{lu2025thermal}    & 2025 & Multi-source Thermal SR        & SR      & N$\to$N   & ${\uparrow}$PSNR on THEMIS thermal; multi-modal fusion          & Yes     & Thermal domain only; no visual RGB texture output \\
+\cite{khanna2024diffusionsat} & 2024 & DiffusionSat             & SR/Gen  & N$\to$N   & SOTA FID on multi-sensor RS; ICLR 2024                          & No      & No Mars training data; Earth geolocation conditioning \\
+\cite{zhu2025taming}    & 2025 & TamingDiff-SRSISR             & SR      & N$\to$N   & ${\times}4$; ${\uparrow}$PSNR $+$ competitive FID on DOTA      & No      & Not Mars-specific; no view-angle transformation \\
+\midrule
+\cite{kim2024unsb}      & 2024 & UNSB (Schr{\"o}dinger Bridge) & I2I     & Any$\to$Any & ${\downarrow}$FID vs.\ CycleGAN/CUT; unpaired; ICLR 2024      & No      & Tested on colour-domain only; no geometry-aware view transform \\
+\cite{xiao2025brownian} & 2025 & Dual-approx Bridge            & I2I     & Any$\to$Any & Deterministic I2I; ${\uparrow}$SSIM/LPIPS vs.\ stochastic; CVPR 2025 & No & No RS or planetary application demonstrated \\
+\midrule
+\cite{tao2021madnet}    & 2021 & MADNet 2.0                    & DTM     & N$\to$3D  & Monocular DTM ${\approx}$stereo accuracy; 25\,cm/pixel          & Yes     & Elevation only; no visual surface texture synthesis \\
+\cite{zou2026pfmgan}    & 2026 & PFMGAN (physics-fusion GAN)   & DTM     & N$\to$3D  & $>{50\%}$ RMSE${\downarrow}$ over baselines; 5 landform types; 0.25--6\,m/pixel & Yes & DTM only; no perspective appearance rendering \\
+\cite{cao2024gen3d}     & 2024 & Cond.\ GAN-DTM (ISPRS)        & DTM     & N$\to$3D  & Height consistency on 4 Mars regions vs.\ stereo ground truth   & Yes     & DEM output only; limited geographic validation \\
+\cite{osadnik2025mcted} & 2025 & MCTED dataset                 & Data    & N (pairs) & 80,898 CTX-DEM pairs; ML-ready                                  & Yes     & Nadir$+$elevation only; no perspective-view samples \\
+\cite{serrano2013hirise}& 2013 & Bayesian rock density (CTX)   & Analysis& N$\to$N   & Probabilistic rock density from CTX; Bayesian network           & Yes     & Density inference only; no texture or view transform \\
+\midrule
+\cite{giusti2022marf}   & 2022 & MaRF (NeRF)                   & NeRF    & P$\to$3D  & Novel view synthesis; PSNR/SSIM${\approx}$standard NeRF         & Yes     & Requires existing rover images; no synthesis from orbital data \\
+\cite{li2025martian}    & 2025 & MarsGen / M3arsSynth          & NeRF+VR & P$\to$VR  & ${\uparrow}$FID vs.\ terrestrial video models; 10K+ video clips & Yes     & Rover perspective data only; unvisited terrain not covered \\
+\cite{dealmeida2025neural3d} & 2025 & Neural height-field (descent) & NeRF & N/oblique$\to$3D & Neural HF$>$MVS on RMSE (simulated descent)               & Partial & Simulated data; descent-phase geometry only; no texture \\
+\cite{martinezpetersen2025hifi} & 2025 & NeRF$+$GS pipeline (ROS~2) & NeRF+GS & P$\to$3D & Real-time GS render; ROS~2 integration; qualitative             & Partial & Rover perspective input only; no orbital-to-3D path \\
+\cite{paul2025nerfspace}& 2025 & NeRF in space (survey)        & Review  & ---       & Comprehensive review; confirms no nadir$\to$perspective method  & Yes     & Survey only; confirms gap is open \\
+\midrule
+\cite{catalano2025inpainting} & 2025 & Diffusion inpainting (VR) & VR     & N$\to$VR\textsubscript{H} & ${\uparrow}$15\% RMSE; 81\% LPIPS vs.\ baselines; SSIM/MS-SSIM & Yes & Heightmap only; no RGB texture synthesis \\
+\midrule
+\cite{aithal2024hallucination} & 2024 & Mode interpolation analysis & Theory & --- & Mechanistic explanation of hallucination; NeurIPS 2024         & No      & Analytical only; no mitigation method proposed \\
+\cite{rathkopf2025reliability} & 2025 & Hallucination-to-reliability & Theory & --- & Physics-guided training converts hallucination to bounded risk  & No      & Conceptual framework; no implementation or evaluation \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Several patterns emerge from Table~\ref{tab:comparison} that are not apparent
+from reading the papers individually. First, a clean partition separates
+nadir-domain methods (all five SR papers and three DTM papers) from
+perspective-domain methods (all three NeRF papers that were evaluated on real
+Mars data). Not a single method crosses this boundary. The view angle of the
+input determines the view angle of the output in every case except the two
+theoretical I2I papers, which were benchmarked on natural images only.
+
+Second, the methods with the strongest quantitative evidence of improvement
+are those that incorporate explicit physical constraints. PFMGAN~\cite{zou2026pfmgan},
+which embeds solar geometry and albedo modelling into its GAN, achieves more
+than 50\% RMSE reduction over unconstrained baselines, the largest margin of any
+generation method reviewed. By contrast, the SR papers relying on perceptual loss
+functions without domain physics (MARSGAN, the early DiffusionSat applications)
+produce plausible outputs but show greater tendency towards mode-interpolation
+artefacts of the kind analysed in~\cite{aithal2024hallucination}. This is not a
+coincidence: physical constraints restrict the generative model's output
+distribution to a subspace consistent with planetary surface physics, and
+hallucinated features that lie outside that subspace incur training loss.
+
+Third, the two papers that come closest to a complete VR pipeline MarsGen
+\cite{li2025martian} and the inpainting
+system~\cite{catalano2025inpainting} each address one dimension of the
+synthesis problem. MarsGen produces photorealistic perspective-view video but
+requires rover imagery as input. The inpainting system completes elevation maps
+from orbital data but produces no surface colour. A system that combines
+orbital nadir input with perspective-view RGB texture output and is constrained
+by physical priors does not exist in the reviewed literature.
+
+Fourth, the two I2I papers~\cite{kim2024unsb, xiao2025brownian} represent the
+strongest architectural candidates for closing the nadir-to-perspective gap,
+but neither has been evaluated on remote sensing data. The jump from colour-domain
+translation on natural images to geometry-dependent view-angle transformation on
+satellite and rover imagery is substantial and constitutes an open research
+problem.
+
+% =============================================================================
+\section{Open Challenges and Future Research Directions}
+\label{sec:challenges}
+
+\subsection{The Absence of Aligned Cross-View Training Data}
+\label{subsec:data-gap}
+
+Every supervised learning method reviewed requires either paired training samples
+(nadir image and corresponding high-resolution target) or at minimum two separate
+corpora that can be aligned statistically for unpaired training. For the
+nadir-to-perspective Mars problem, no dataset provides geographically matched
+nadir and perspective images of the same surface patch at aligned resolution.
+MCTED~\cite{osadnik2025mcted} provides the largest nadir-CTX collection to date,
+but paired with elevation maps rather than perspective imagery. The rover
+navigation datasets used by MarsGen~\cite{li2025martian} provide perspective
+views at four visited sites, with no co-registered nadir counterpart. Assembling
+a training corpus that bridges both views whether through simulation, multi-view
+geometric projection, or data augmentation is a methodological prerequisite
+that none of the reviewed work addresses.
+
+One route is synthetic data: projecting known Mars surface models (derived from
+HiRISE stereo or from MADNet~2.0 monocular DTMs) into simulated rover
+perspective renders. This approach is constrained by the realism of the Mars
+texture models used to colour the geometry and by the domain gap between rendered
+synthetic scenes and real rover imagery. Narrow-band domain gaps between
+synthetic and real Mars images have been observed in landing hazard detection
+contexts~\cite{serrano2013hirise}, and the gap between rendered and real surface
+photometry is likely wider than domain adaptation methods such as
+UNSB~\cite{kim2024unsb} have been tested on.
+
+\subsection{Hallucination as a Safety-Critical Constraint}
+\label{subsec:hallucination-challenge}
+
+Mode interpolation~\cite{aithal2024hallucination} is a structural property of
+diffusion-based generation, not a defect correctable by training longer or with
+more data. For Earth-facing applications the consequences of a hallucinated
+texture are aesthetic. For Mars mission training, a generated crater that does
+not exist at the landing site, or the absence of a real hazard that the model
+did not synthesise, could misdirect a crew's traverse planning. The reliability
+framework of Rathkopf~\cite{rathkopf2025reliability} physics-guided training
+plus confidence-based output screening provides the most credible route to
+bounded hallucination risk, but it has not been instantiated for planetary
+imagery generation. Key domain priors that would constrain Mars generation
+include: cratering density and size-frequency distributions from impact physics;
+aeolian bedform wavelength--height relationships; photometric functions for basaltic
+and ferric oxide surface compositions; and shadow angle constraints imposed by
+Mars's axial tilt and the landing site's latitude and season. Embedding these in
+the training objective is an open engineering problem.
+
+\subsection{The Computational Cost of Diffusion Synthesis at Planetary Scale}
+\label{subsec:compute}
+
+Diffusion models require iterative denoising over many steps (typically 20--1000)
+per generated sample. DiffusionSat~\cite{khanna2024diffusionsat} operates on
+individual tiles at fixed resolution; MarsGen~\cite{li2025martian} generates
+video clips of limited spatial extent. Generating continuous,
+full-site Mars surface texture at rover camera resolution would require either
+tiling with consistent boundary conditions across tiles, or a cascaded coarse-to-fine
+approach. Neither strategy has been demonstrated at the scale needed for a
+mission landing site: Oxia Planum spans roughly $200 \times 200$\,km, and even
+a modest 100-pixel-per-metre rover texture resolution implies generating $4 \times
+10^{10}$ RGB pixels. Memory requirements for a diffusion model trained at this
+scale, and inference times for generating the full canvas, represent unsolved
+engineering problems. The Gaussian Splatting representation demonstrated
+in~\cite{martinezpetersen2025hifi} offers one path toward efficient storage and
+real-time rendering once the scene has been generated, but it does not address
+the generation bottleneck.
+
+\subsection{Evaluation Benchmarks for Mars Surface Generation}
+\label{subsec:eval}
+
+The reviewed SR literature uses at least four distinct evaluation protocols:
+qualitative geomorphological expert assessment~\cite{tao2021cassis}, PSNR/SSIM
+against bicubically downsampled originals~\cite{wu2024rstsrn}, perceptual metrics
+(LPIPS, FID) on remote sensing benchmarks~\cite{zhu2025taming, khanna2024diffusionsat},
+and structural metrics (SSIM, MS-SSIM) on heightmap inpainting~\cite{catalano2025inpainting}.
+No standardised benchmark exists for evaluating the photorealistic quality and
+physical correctness of synthesised Mars perspective-view imagery. Without such
+a benchmark, comparing methods or demonstrating progress towards the VR synthesis
+objective is not possible in a reproducible manner. Establishing a Mars texture
+synthesis benchmark with held-out rover images as reference targets and a
+protocol for generating nadir inputs at matched locations from orbital
+archives is a necessary community infrastructure contribution.
+
+\subsection{Multi-Modal Fusion Across Instrument Types}
+\label{subsec:multimodal}
+
+The thermal SR work of Lu and Su~\cite{lu2025thermal} and the Bayesian rock
+density prediction of Serrano \textit{et al.}~\cite{serrano2013hirise} both
+demonstrate that information from multiple Mars instruments can be combined to
+recover surface properties unresolvable from any single data source. Visible
+imaging, thermal IR, and topographic data each carry distinct information
+about surface composition, thermophysical properties, and physical structure. A
+generative pipeline that fuses all three using thermal emission to constrain
+surface material type, topographic derivatives to constrain shape-from-shading
+ambiguities, and visible reflectance to anchor albedo which would face far fewer
+hallucination degrees of freedom than a model trained on visible imagery alone.
+No reviewed paper pursues this multi-modal fusion strategy for texture synthesis,
+and MCTED's limitation to visible-elevation pairs underscores the data gap this
+would require addressing.
+
+% =============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+Twenty publications reviewed here collectively demonstrate that the constituent
+capabilities needed for VR-grade Mars landing site visualisation, super-resolution
+of orbital imagery, image domain translation, DTM generation, neural scene
+rendering, and diffusion-based inpainting have each advanced substantially
+since 2021. Transformer-based and diffusion-based SR methods now reliably
+outperform GAN baselines on orbital Mars imagery. Physics-constrained GANs
+recover Martian terrain geometry with more than 50\% lower reconstruction error
+than their unconstrained predecessors. NeRF and Gaussian Splatting have been
+demonstrated on real Mars rover data and can, in principle, produce real-time
+renderable scenes. Diffusion inpainting completes missing elevation maps with
+quantifiably superior structural fidelity.
+
+What has not been demonstrated is the integration of these capabilities into
+a pipeline that starts from nadir orbital data and ends with rover-perspective
+visual texture at VR-grade fidelity. The view-angle transformation from
+nadir to perspective is the missing operation, and it appears in none of the
+reviewed methods. The I2I frameworks of~\cite{kim2024unsb} and~\cite{xiao2025brownian}
+are architecturally the strongest candidates for this transformation, but neither
+has been applied to remote sensing imagery, let alone to the photometrically
+complex domain shift between nadir Mars orbital and perspective rover views.
+
+The proposed dissertation targets this specific gap. The analysis of
+hallucination risk in~\cite{aithal2024hallucination} and the reliability
+framework of~\cite{rathkopf2025reliability} together establish that
+physics-constrained training is not optional but mandatory for the outputs to
+be scientifically usable in mission planning. PFMGAN's result~\cite{zou2026pfmgan}
+that explicit physical priors reduce reconstruction error by more than half which
+provides a proof-of-principle that such constraints are learnable from data.
+The combination of unpaired I2I translation (to bridge the view domains without
+requiring aligned training pairs), physics-informed training objectives (to bound
+hallucination risk), and a Gaussian Splatting output representation (to enable
+real-time VR rendering) defines the most promising direction identified by this
+survey, and it is the direction the proposed work will pursue.
+
+% =============================================================================
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}
