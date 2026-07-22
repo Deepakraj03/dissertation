@@ -1,6 +1,9 @@
 # Dev tooling local-only settings (machine-specific permission grants)
 .devtool/settings.local.json
 
+# Dev tooling session-runtime lock files (not project content)
+.devtool/scheduled_tasks.lock
+
 # LibreOffice lock files
 .~lock.*#
 
