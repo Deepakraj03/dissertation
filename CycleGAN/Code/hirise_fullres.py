@@ -18,10 +18,11 @@ from pathlib import Path
 
 import numpy as np
 import requests
+import rasterio
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from preprocess import entropy, ENTROPY_TH
+from preprocess import entropy, ENTROPY_TH, normalise, save_patch
 
 RDR_BASE = "https://hirise.lpl.arizona.edu/PDS"
 
@@ -107,3 +108,40 @@ def extract_qualifying_patches(arr: np.ndarray, positions: list[tuple[int, int]]
         if entropy(patch) >= ENTROPY_TH:
             qualifying.append(patch)
     return qualifying
+
+
+def process_observation(obs_id: str, file_name_spec: str, scratch_dir: Path,
+                        staging_dir: Path, target_patches: int = 5000,
+                        n_candidates: int = 8000, patch_size: int = 256,
+                        seed: int = 0) -> dict:
+    """Download one real RDR product, extract up to target_patches
+    qualifying patches, save them to staging_dir, and delete the
+    downloaded source file regardless of outcome. Returns a status dict."""
+    url = real_rdr_url_for(file_name_spec)
+    if url is None:
+        return {"obs_id": obs_id, "status": "skipped_not_red_jp2", "patches_saved": 0}
+
+    scratch_path = scratch_dir / f"{obs_id}_RED.JP2"
+    if not download_with_verify(url, scratch_path):
+        return {"obs_id": obs_id, "status": "download_failed", "patches_saved": 0}
+
+    try:
+        try:
+            with rasterio.open(scratch_path) as src:
+                arr = src.read(1)
+                width, height = src.width, src.height
+        except Exception as e:
+            return {"obs_id": obs_id, "status": f"read_failed: {e}", "patches_saved": 0}
+
+        stretched = normalise(arr)
+        positions = sample_patch_positions(width, height, patch_size, n_candidates, seed)
+        patches = extract_qualifying_patches(stretched, positions, patch_size, target_patches)
+
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        for i, patch in enumerate(patches):
+            save_patch(patch, staging_dir / f"{obs_id}_p{i:04d}.png")
+
+        return {"obs_id": obs_id, "status": "ok", "patches_saved": len(patches)}
+    finally:
+        if scratch_path.exists():
+            scratch_path.unlink()

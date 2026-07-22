@@ -154,3 +154,94 @@ def test_sample_patch_positions_patch_larger_than_both():
     positions = sample_patch_positions(width=100, height=100, patch_size=256,
                                        n_candidates=50, seed=0)
     assert positions == [], "Should return empty list when patch_size > both dimensions"
+
+
+from unittest.mock import patch as mock_patch
+from pathlib import Path
+
+import rasterio
+from rasterio.transform import from_origin
+
+from hirise_fullres import process_observation
+
+
+def _write_test_geotiff(path: Path, width: int, height: int) -> None:
+    """Write a small single-band uint16 GeoTIFF standing in for a real RDR
+    product in tests (rasterio can read GeoTIFF and JP2 identically via the
+    same API, so this exercises the same code path without needing a real
+    568MB JP2 file in the test suite)."""
+    rng = np.random.default_rng(0)
+    data = rng.integers(0, 65535, size=(height, width), dtype=np.uint16)
+    with rasterio.open(
+        path, "w", driver="GTiff", width=width, height=height, count=1,
+        dtype="uint16", transform=from_origin(0, 0, 1, 1),
+    ) as dst:
+        dst.write(data, 1)
+
+
+def test_process_observation_skips_non_red_jp2(tmp_path):
+    result = process_observation(
+        obs_id="ESP_TEST_0001",
+        file_name_spec="RDR/ESP/ORB_TEST/ESP_TEST_0001/ESP_TEST_0001_COLOR.JP2",
+        scratch_dir=tmp_path / "scratch",
+        staging_dir=tmp_path / "staging",
+    )
+    assert result == {"obs_id": "ESP_TEST_0001", "status": "skipped_not_red_jp2",
+                      "patches_saved": 0}
+
+
+def test_process_observation_full_pipeline(tmp_path, monkeypatch):
+    scratch_dir = tmp_path / "scratch"
+    staging_dir = tmp_path / "staging"
+    fake_tif = tmp_path / "fake_source.tif"
+    _write_test_geotiff(fake_tif, width=2000, height=1500)
+
+    def fake_download(url, dest_path):
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        dest_path.write_bytes(fake_tif.read_bytes())
+        return True
+
+    monkeypatch.setattr("hirise_fullres.download_with_verify", fake_download)
+
+    result = process_observation(
+        obs_id="ESP_TEST_0002",
+        file_name_spec="RDR/ESP/ORB_TEST/ESP_TEST_0002/ESP_TEST_0002_RED.JP2",
+        scratch_dir=scratch_dir,
+        staging_dir=staging_dir,
+        target_patches=5,
+        n_candidates=50,
+    )
+
+    assert result["obs_id"] == "ESP_TEST_0002"
+    assert result["status"] == "ok"
+    assert result["patches_saved"] > 0
+    saved_files = list(staging_dir.glob("ESP_TEST_0002_*.png"))
+    assert len(saved_files) == result["patches_saved"]
+    # fake_download creates scratch_dir via dest_path.parent.mkdir(), so it
+    # exists at this point — it must be empty (scratch file deleted after
+    # processing), not absent.
+    assert list(scratch_dir.iterdir()) == []
+
+
+def test_process_observation_deletes_scratch_file_on_read_failure(tmp_path, monkeypatch):
+    scratch_dir = tmp_path / "scratch"
+    staging_dir = tmp_path / "staging"
+
+    def fake_download(url, dest_path):
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        dest_path.write_bytes(b"not a real raster file")
+        return True
+
+    monkeypatch.setattr("hirise_fullres.download_with_verify", fake_download)
+
+    result = process_observation(
+        obs_id="ESP_TEST_0003",
+        file_name_spec="RDR/ESP/ORB_TEST/ESP_TEST_0003/ESP_TEST_0003_RED.JP2",
+        scratch_dir=scratch_dir,
+        staging_dir=staging_dir,
+    )
+
+    assert result["status"].startswith("read_failed")
+    assert result["patches_saved"] == 0
+    # The unreadable scratch file must not be left behind.
+    assert list(scratch_dir.iterdir()) == []
