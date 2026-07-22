@@ -101,3 +101,56 @@ def test_extract_qualifying_patches_skips_low_entropy_patches():
                                          target_count=2)
 
     assert patches == []
+
+
+def test_sample_patch_positions_returns_distinct_positions():
+    """Verify that positions are distinct — no duplicates in the output."""
+    positions = sample_patch_positions(width=1000, height=800, patch_size=256,
+                                       n_candidates=100, seed=0)
+
+    # Convert to set to check uniqueness
+    assert len(positions) == len(set(positions)), \
+        f"Expected {len(positions)} distinct positions, got {len(set(positions))} unique"
+
+    # Should have exactly n_candidates distinct positions
+    assert len(positions) == 100
+
+
+def test_sample_patch_positions_enforces_distinctness_with_small_space():
+    """When position space is smaller than n_candidates, return all valid
+    positions without hanging or crashing."""
+    # Small image (4x4), patch_size 2 => only 3x3=9 valid positions
+    # Requesting 50 candidates should return at most 9 (all valid positions)
+    positions = sample_patch_positions(width=4, height=4, patch_size=2,
+                                       n_candidates=50, seed=42)
+
+    assert len(positions) <= 9, \
+        f"Expected at most 9 positions in a 4x4 image with patch_size=2, got {len(positions)}"
+    assert len(positions) == len(set(positions)), \
+        "Returned positions should be distinct"
+
+    # All positions should be valid
+    for y, x in positions:
+        assert 0 <= y <= 4 - 2
+        assert 0 <= x <= 4 - 2
+
+
+def test_sample_patch_positions_patch_larger_than_height():
+    """When patch_size > height, return empty list instead of crashing."""
+    positions = sample_patch_positions(width=1000, height=255, patch_size=256,
+                                       n_candidates=50, seed=0)
+    assert positions == [], "Should return empty list when patch_size > height"
+
+
+def test_sample_patch_positions_patch_larger_than_width():
+    """When patch_size > width, return empty list instead of crashing."""
+    positions = sample_patch_positions(width=255, height=800, patch_size=256,
+                                       n_candidates=50, seed=0)
+    assert positions == [], "Should return empty list when patch_size > width"
+
+
+def test_sample_patch_positions_patch_larger_than_both():
+    """When patch_size is larger than both dimensions, return empty list."""
+    positions = sample_patch_positions(width=100, height=100, patch_size=256,
+                                       n_candidates=50, seed=0)
+    assert positions == [], "Should return empty list when patch_size > both dimensions"

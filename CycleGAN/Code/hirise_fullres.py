@@ -19,9 +19,9 @@ from pathlib import Path
 import numpy as np
 import requests
 
-from preprocess import entropy, ENTROPY_TH
-
 sys.path.insert(0, str(Path(__file__).parent))
+
+from preprocess import entropy, ENTROPY_TH
 
 RDR_BASE = "https://hirise.lpl.arizona.edu/PDS"
 
@@ -69,13 +69,29 @@ def sample_patch_positions(width: int, height: int, patch_size: int,
     """Randomly sample up to n_candidates distinct (y, x) top-left patch
     positions within [0, height - patch_size] x [0, width - patch_size],
     so patches are drawn from across the image's full extent rather than
-    filled sequentially from one corner."""
+    filled sequentially from one corner. Returns an empty list if patch_size
+    is larger than width or height."""
     rng = random.Random(seed)
     max_y = height - patch_size
     max_x = width - patch_size
-    positions = [(rng.randint(0, max_y), rng.randint(0, max_x))
-                 for _ in range(n_candidates)]
-    return positions
+
+    # Return empty list if patch is larger than image dimensions
+    if max_y < 0 or max_x < 0:
+        return []
+
+    # Use set-based approach to ensure distinctness
+    positions_set = set()
+    max_attempts = n_candidates * 10
+    attempts = 0
+
+    while len(positions_set) < n_candidates and attempts < max_attempts:
+        y = rng.randint(0, max_y)
+        x = rng.randint(0, max_x)
+        positions_set.add((y, x))
+        attempts += 1
+
+    # Return as list (insertion order is deterministic from the seed)
+    return list(positions_set)
 
 
 def extract_qualifying_patches(arr: np.ndarray, positions: list[tuple[int, int]],
