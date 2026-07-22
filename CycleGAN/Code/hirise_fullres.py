@@ -12,10 +12,14 @@ Usage:
     python hirise_fullres.py --region oxia_planum --n-observations 10
 """
 
+import random
 import sys
 from pathlib import Path
 
+import numpy as np
 import requests
+
+from preprocess import entropy, ENTROPY_TH
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -58,3 +62,32 @@ def download_with_verify(url: str, dest_path: Path) -> bool:
         if dest_path.exists():
             dest_path.unlink()
         return False
+
+
+def sample_patch_positions(width: int, height: int, patch_size: int,
+                           n_candidates: int, seed: int) -> list[tuple[int, int]]:
+    """Randomly sample up to n_candidates distinct (y, x) top-left patch
+    positions within [0, height - patch_size] x [0, width - patch_size],
+    so patches are drawn from across the image's full extent rather than
+    filled sequentially from one corner."""
+    rng = random.Random(seed)
+    max_y = height - patch_size
+    max_x = width - patch_size
+    positions = [(rng.randint(0, max_y), rng.randint(0, max_x))
+                 for _ in range(n_candidates)]
+    return positions
+
+
+def extract_qualifying_patches(arr: np.ndarray, positions: list[tuple[int, int]],
+                               patch_size: int, target_count: int) -> list[np.ndarray]:
+    """Extract patches at positions in order, keeping only those passing
+    the entropy filter, stopping once target_count qualifying patches are
+    collected or positions is exhausted."""
+    qualifying = []
+    for y, x in positions:
+        if len(qualifying) >= target_count:
+            break
+        patch = arr[y:y + patch_size, x:x + patch_size]
+        if entropy(patch) >= ENTROPY_TH:
+            qualifying.append(patch)
+    return qualifying
