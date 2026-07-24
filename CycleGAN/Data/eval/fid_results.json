@@ -1,7 +1,7 @@
 {
-  "fid": 171.77874146288661,
-  "checkpoint": "epoch_025.pt\u00a0",
-  "n_generated": 4633,
+  "fid": 269.85850034347067,
+  "checkpoint": "epoch_050.pt",
+  "n_generated": 3024,
   "n_real": 2553,
-  "timestamp": "2026-07-18T17:05:39.234901+00:00"
+  "timestamp": "2026-07-24T12:46:28.032890+00:00"
 }
