@@ -35,6 +35,7 @@ class DtmCoverageRecord:
     min_lon: float
     max_lon: float
     comment: str
+    files_url: str
 
 
 def build_ode_dtm_query_url(min_lat: float, max_lat: float,
@@ -87,6 +88,7 @@ def parse_ode_response(response_json: dict) -> list[DtmCoverageRecord]:
             min_lon=float(p["Westernmost_longitude"]),
             max_lon=float(p["Easternmost_longitude"]),
             comment=p.get("Comment", ""),
+            files_url=p["FilesURL"],
         ))
     return records
 

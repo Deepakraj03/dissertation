@@ -13,6 +13,7 @@ SAMPLE_RESPONSE_MULTI = {
             "Product": [
                 {
                     "LabelURL": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_015900_015999/ESP_015985_2040_ESP_016262_2040/DTEEC_015985_2040_016262_2040_U01.IMG",
+                    "FilesURL": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_015985_2040_016262_2040_U01&product_idGeo=26731198",
                     "Minimum_latitude": "23.6875",
                     "Maximum_latitude": "23.9711",
                     "Westernmost_longitude": "341.035",
@@ -27,6 +28,7 @@ SAMPLE_RESPONSE_MULTI = {
                 },
                 {
                     "LabelURL": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_017800_017899/ESP_017897_2045_ESP_018530_2045/DTEEC_017897_2045_018530_2045_A01.IMG",
+                    "FilesURL": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_017897_2045_018530_2045_A01&product_idGeo=26731199",
                     "Minimum_latitude": "23.9681",
                     "Maximum_latitude": "24.2108",
                     "Westernmost_longitude": "341.396",
@@ -88,6 +90,10 @@ def test_parse_ode_response_multiple_products():
     assert first.min_lon == pytest.approx(341.035)
     assert first.max_lon == pytest.approx(341.178)
     assert "Mawrth Vallis" in first.comment
+    assert first.files_url == (
+        "https://ode.rsl.wustl.edu/mars/productfiles.aspx"
+        "?product_id=DTEEC_015985_2040_016262_2040_U01&product_idGeo=26731198"
+    )
 
 
 def test_parse_ode_response_single_product_not_wrapped_in_list():
@@ -124,6 +130,7 @@ def test_build_coverage_report_shape():
                 min_lat=23.6875, max_lat=23.9711,
                 min_lon=341.035, max_lon=341.178,
                 comment="test",
+                files_url="https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=TEST&product_idGeo=123",
             )
         ],
     )
