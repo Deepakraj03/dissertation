@@ -17,7 +17,8 @@
       "max_lat": 23.9711,
       "min_lon": 341.035,
       "max_lon": 341.178,
-      "comment": "Possible MSL landing site in Mawrth Vallis"
+      "comment": "Possible MSL landing site in Mawrth Vallis",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_015985_2040_016262_2040_U01&product_idGeo=26731198"
     },
     {
       "product_id": "DTEEC_017897_2045_018530_2045_A01",
@@ -28,7 +29,8 @@
       "max_lat": 24.2108,
       "min_lon": 341.396,
       "max_lon": 341.522,
-      "comment": "Clay diversity on Mawrth Vallis flank"
+      "comment": "Clay diversity on Mawrth Vallis flank",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_017897_2045_018530_2045_A01&product_idGeo=26731314"
     },
     {
       "product_id": "DTEEC_022288_2035_022354_2035_A01",
@@ -39,7 +41,8 @@
       "max_lat": 23.5177,
       "min_lon": 339.938,
       "max_lon": 340.068,
-      "comment": "Mawrth Vallis strata with interesting geometry exposed in small crater"
+      "comment": "Mawrth Vallis strata with interesting geometry exposed in small crater",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_022288_2035_022354_2035_A01&product_idGeo=26731608"
     },
     {
       "product_id": "DTEEC_023567_2000_023422_2000_A01",
@@ -50,7 +53,8 @@
       "max_lat": 19.822,
       "min_lon": 342.433,
       "max_lon": 342.557,
-      "comment": "Possible future landing site in southern Mawrth Vallis"
+      "comment": "Possible future landing site in southern Mawrth Vallis",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_023567_2000_023422_2000_A01&product_idGeo=26731680"
     },
     {
       "product_id": "DTEEC_036859_2020_036569_2020_A01",
@@ -61,7 +65,8 @@
       "max_lat": 21.7827,
       "min_lon": 337.354,
       "max_lon": 337.471,
-      "comment": "McLaughlin Crater dunes"
+      "comment": "McLaughlin Crater dunes",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_036859_2020_036569_2020_A01&product_idGeo=26732386"
     },
     {
       "product_id": "DTEED_042714_2035_042424_2035_A01",
@@ -72,7 +77,8 @@
       "max_lat": 23.2871,
       "min_lon": 339.542,
       "max_lon": 339.658,
-      "comment": "Spacing and arrangement of barchan dunes in Oyama Crater"
+      "comment": "Spacing and arrangement of barchan dunes in Oyama Crater",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEED_042714_2035_042424_2035_A01&product_idGeo=26732499"
     },
     {
       "product_id": "DTEEC_002074_2025_002140_2025_U01",
@@ -83,7 +89,8 @@
       "max_lat": 22.6256,
       "min_lon": 341.702,
       "max_lon": 341.848,
-      "comment": "Layering and dark mantle along tributary to Mawrth Vallis"
+      "comment": "Layering and dark mantle along tributary to Mawrth Vallis",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_002074_2025_002140_2025_U01&product_idGeo=26732701"
     },
     {
       "product_id": "DTEEC_005964_2045_011884_2045_U01",
@@ -94,7 +101,8 @@
       "max_lat": 24.1513,
       "min_lon": 340.993,
       "max_lon": 341.133,
-      "comment": "Mawrth Vallis variations in mineralogy"
+      "comment": "Mawrth Vallis variations in mineralogy",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_005964_2045_011884_2045_U01&product_idGeo=26732934"
     },
     {
       "product_id": "DTEEC_006676_2045_007612_2045_U01",
@@ -105,7 +113,8 @@
       "max_lat": 24.2097,
       "min_lon": 341.096,
       "max_lon": 341.246,
-      "comment": "Characterize surface hazards and science of possible MSL rover landing site"
+      "comment": "Characterize surface hazards and science of possible MSL rover landing site",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_006676_2045_007612_2045_U01&product_idGeo=26732968"
     },
     {
       "product_id": "DTEEC_007599_2020_007454_2020_U01",
@@ -116,7 +125,8 @@
       "max_lat": 21.8077,
       "min_lon": 337.698,
       "max_lon": 337.8303,
-      "comment": "Mawrth Vallis phyllosilicates"
+      "comment": "Mawrth Vallis phyllosilicates",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_007599_2020_007454_2020_U01&product_idGeo=26733041"
     },
     {
       "product_id": "DTEEC_008469_2040_008825_2040_U01",
@@ -127,7 +137,8 @@
       "max_lat": 24.1594,
       "min_lon": 340.884,
       "max_lon": 341.042,
-      "comment": "Characterize surface hazards and science of possible MSL rover landing site"
+      "comment": "Characterize surface hazards and science of possible MSL rover landing site",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_008469_2040_008825_2040_U01&product_idGeo=26733104"
     },
     {
       "product_id": "DTEEC_010816_2040_010882_2040_U01",
@@ -138,7 +149,8 @@
       "max_lat": 24.1014,
       "min_lon": 340.793,
       "max_lon": 340.938,
-      "comment": "Possible MSL landing site Mawrth Vallis"
+      "comment": "Possible MSL landing site Mawrth Vallis",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_010816_2040_010882_2040_U01&product_idGeo=26733271"
     },
     {
       "product_id": "DTEEC_036305_2025_035804_2025_L01",
@@ -149,7 +161,8 @@
       "max_lat": 22.434,
       "min_lon": 341.5144,
       "max_lon": 341.6631,
-      "comment": "Mawrth Vallis region"
+      "comment": "Mawrth Vallis region",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_036305_2025_035804_2025_L01&product_idGeo=26912435"
     },
     {
       "product_id": "DTEEC_036925_1985_037558_1985_L01",
@@ -160,7 +173,8 @@
       "max_lat": 18.3497,
       "min_lon": 335.514,
       "max_lon": 335.6377,
-      "comment": "Candidate future landing site"
+      "comment": "Candidate future landing site",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_036925_1985_037558_1985_L01&product_idGeo=26951960"
     },
     {
       "product_id": "DTEEC_003195_1985_002694_1985_L01",
@@ -171,7 +185,8 @@
       "max_lat": 18.3461,
       "min_lon": 335.7848,
       "max_lon": 335.9062,
-      "comment": "Alluvial fan in Arabia Terra"
+      "comment": "Alluvial fan in Arabia Terra",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_003195_1985_002694_1985_L01&product_idGeo=26952301"
     },
     {
       "product_id": "DTEEC_009880_1985_009735_1985_L01",
@@ -182,7 +197,8 @@
       "max_lat": 18.3569,
       "min_lon": 335.4073,
       "max_lon": 335.5441,
-      "comment": "Clay bearing unit in western Arabia region"
+      "comment": "Clay bearing unit in western Arabia region",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_009880_1985_009735_1985_L01&product_idGeo=27115813"
     },
     {
       "product_id": "DTEEC_037070_1985_037136_1985_L01",
@@ -193,7 +209,8 @@
       "max_lat": 18.3452,
       "min_lon": 335.989,
       "max_lon": 336.199,
-      "comment": "Candidate ExoMars landing site"
+      "comment": "Candidate ExoMars landing site",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_037070_1985_037136_1985_L01&product_idGeo=28021113"
     },
     {
       "product_id": "DTEEC_039299_1985_047501_1985_L01",
@@ -204,7 +221,8 @@
       "max_lat": 18.4099,
       "min_lon": 335.6104,
       "max_lon": 335.7314,
-      "comment": "Candidate ExoMars landing site"
+      "comment": "Candidate ExoMars landing site",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_039299_1985_047501_1985_L01&product_idGeo=28021115"
     },
     {
       "product_id": "DTEEC_042134_1985_053962_1985_L01",
@@ -215,7 +233,8 @@
       "max_lat": 18.1665,
       "min_lon": 335.8262,
       "max_lon": 335.9398,
-      "comment": "Oxia Palus region"
+      "comment": "Oxia Palus region",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_042134_1985_053962_1985_L01&product_idGeo=28021116"
     },
     {
       "product_id": "DTEEC_046103_2030_052129_2030_L01",
@@ -226,7 +245,8 @@
       "max_lat": 22.9855,
       "min_lon": 340.7245,
       "max_lon": 340.84,
-      "comment": "Candidate ExoMars landing site in Mawrth Vallis"
+      "comment": "Candidate ExoMars landing site in Mawrth Vallis",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_046103_2030_052129_2030_L01&product_idGeo=28021117"
     },
     {
       "product_id": "DTEEC_058380_1985_040921_1985_H01",
@@ -237,7 +257,8 @@
       "max_lat": 18.3233,
       "min_lon": 335.2396,
       "max_lon": 335.3553,
-      "comment": "Candidate ExoMars landing site in Oxia Palus"
+      "comment": "Candidate ExoMars landing site in Oxia Palus",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_058380_1985_040921_1985_H01&product_idGeo=31838416"
     },
     {
       "product_id": "DTEEC_063839_1980_064261_1980_H01",
@@ -248,7 +269,8 @@
       "max_lat": 17.953,
       "min_lon": 335.9601,
       "max_lon": 336.0632,
-      "comment": "Candidate ExoMars landing site in Oxia Planum"
+      "comment": "Candidate ExoMars landing site in Oxia Planum",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_063839_1980_064261_1980_H01&product_idGeo=31838438"
     },
     {
       "product_id": "DTEEC_073467_2010_073533_2010_A01",
@@ -259,7 +281,8 @@
       "max_lat": 20.912,
       "min_lon": 342.4678,
       "max_lon": 342.5723,
-      "comment": "Dune monitoring in candidate ExoMars landing site in Mawrth Vallis"
+      "comment": "Dune monitoring in candidate ExoMars landing site in Mawrth Vallis",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_073467_2010_073533_2010_A01&product_idGeo=36032791"
     },
     {
       "product_id": "DTEEC_040512_2020_040156_2020_A01",
@@ -270,7 +293,8 @@
       "max_lat": 21.8629,
       "min_lon": 337.8009,
       "max_lon": 337.9366,
-      "comment": "Candidate landing site for 2020 mission in McLaughlin Crater"
+      "comment": "Candidate landing site for 2020 mission in McLaughlin Crater",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_040512_2020_040156_2020_A01&product_idGeo=46784698"
     },
     {
       "product_id": "DTEED_070883_1970_062547_1970_A01",
@@ -281,7 +305,8 @@
       "max_lat": 17.3389,
       "min_lon": 335.6828,
       "max_lon": 335.8344,
-      "comment": "Depressions near Coogoon Valles"
+      "comment": "Depressions near Coogoon Valles",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEED_070883_1970_062547_1970_A01&product_idGeo=49736273"
     },
     {
       "product_id": "DTEED_051153_2025_053777_2025_A01",
@@ -292,7 +317,8 @@
       "max_lat": 22.4749,
       "min_lon": 342.5435,
       "max_lon": 342.6739,
-      "comment": "Alunite in Mawrth Vallis"
+      "comment": "Alunite in Mawrth Vallis",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEED_051153_2025_053777_2025_A01&product_idGeo=55213434"
     },
     {
       "product_id": "DTEEC_006755_2030_011383_2030_A01",
@@ -303,7 +329,8 @@
       "max_lat": 23.123,
       "min_lon": 341.4817,
       "max_lon": 341.6281,
-      "comment": "Crater on floor of Mawrth Vallis channel"
+      "comment": "Crater on floor of Mawrth Vallis channel",
+      "files_url": "https://ode.rsl.wustl.edu/mars/productfiles.aspx?product_id=DTEEC_006755_2030_011383_2030_A01&product_idGeo=55213880"
     }
   ]
 }
