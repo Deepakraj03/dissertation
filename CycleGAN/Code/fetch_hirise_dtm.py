@@ -32,10 +32,13 @@ def parse_productfiles_html(html: str) -> dict[str, list[str]]:
 
 def fetch_dtm_and_orthos(record: DtmCoverageRecord, scratch_dir: Path,
                          dest_dir: Path) -> dict:
-    """Download record's DTM .IMG and one ortho .JP2 per source
-    observation (preferring the '_A_' variant) into dest_dir, deleting
-    scratch copies as soon as each file is verified. Returns a status dict
-    matching hirise_fullres.process_observation's shape."""
+    """Download record's DTM .IMG and one ortho .JP2 per source observation
+    (preferring the '_A_' variant) directly into dest_dir. Unlike
+    hirise_fullres.py's patch-extraction pipeline, no intermediate
+    processing step exists here — downloaded files are immediately their
+    final form, so no scratch-then-move step is needed (scratch_dir parameter
+    kept for interface consistency but unused). Returns a status dict matching
+    hirise_fullres.process_observation's shape."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     scratch_dir.mkdir(parents=True, exist_ok=True)
 
