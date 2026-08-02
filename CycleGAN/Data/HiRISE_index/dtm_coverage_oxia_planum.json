@@ -1,0 +1,309 @@
+{
+  "region": "oxia_planum",
+  "query_bounds": {
+    "min_lat": 16.0,
+    "max_lat": 24.0,
+    "west_lon_360": 335.0,
+    "east_lon_360": 345.0
+  },
+  "count": 27,
+  "records": [
+    {
+      "product_id": "DTEEC_015985_2040_016262_2040_U01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_015900_015999/ESP_015985_2040_ESP_016262_2040/DTEEC_015985_2040_016262_2040_U01.IMG",
+      "obs_id_a": "ESP_015985_2040",
+      "obs_id_b": "ESP_016262_2040",
+      "min_lat": 23.6875,
+      "max_lat": 23.9711,
+      "min_lon": 341.035,
+      "max_lon": 341.178,
+      "comment": "Possible MSL landing site in Mawrth Vallis"
+    },
+    {
+      "product_id": "DTEEC_017897_2045_018530_2045_A01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_017800_017899/ESP_017897_2045_ESP_018530_2045/DTEEC_017897_2045_018530_2045_A01.IMG",
+      "obs_id_a": "ESP_017897_2045",
+      "obs_id_b": "ESP_018530_2045",
+      "min_lat": 23.9681,
+      "max_lat": 24.2108,
+      "min_lon": 341.396,
+      "max_lon": 341.522,
+      "comment": "Clay diversity on Mawrth Vallis flank"
+    },
+    {
+      "product_id": "DTEEC_022288_2035_022354_2035_A01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_022200_022299/ESP_022288_2035_ESP_022354_2035/DTEEC_022288_2035_022354_2035_A01.IMG",
+      "obs_id_a": "ESP_022288_2035",
+      "obs_id_b": "ESP_022354_2035",
+      "min_lat": 23.3006,
+      "max_lat": 23.5177,
+      "min_lon": 339.938,
+      "max_lon": 340.068,
+      "comment": "Mawrth Vallis strata with interesting geometry exposed in small crater"
+    },
+    {
+      "product_id": "DTEEC_023567_2000_023422_2000_A01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_023500_023599/ESP_023567_2000_ESP_023422_2000/DTEEC_023567_2000_023422_2000_A01.IMG",
+      "obs_id_a": "ESP_023567_2000",
+      "obs_id_b": "ESP_023422_2000",
+      "min_lat": 19.6068,
+      "max_lat": 19.822,
+      "min_lon": 342.433,
+      "max_lon": 342.557,
+      "comment": "Possible future landing site in southern Mawrth Vallis"
+    },
+    {
+      "product_id": "DTEEC_036859_2020_036569_2020_A01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_036800_036899/ESP_036859_2020_ESP_036569_2020/DTEEC_036859_2020_036569_2020_A01.IMG",
+      "obs_id_a": "ESP_036859_2020",
+      "obs_id_b": "ESP_036569_2020",
+      "min_lat": 21.5384,
+      "max_lat": 21.7827,
+      "min_lon": 337.354,
+      "max_lon": 337.471,
+      "comment": "McLaughlin Crater dunes"
+    },
+    {
+      "product_id": "DTEED_042714_2035_042424_2035_A01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_042700_042799/ESP_042714_2035_ESP_042424_2035/DTEED_042714_2035_042424_2035_A01.IMG",
+      "obs_id_a": "ESP_042714_2035",
+      "obs_id_b": "ESP_042424_2035",
+      "min_lat": 23.0972,
+      "max_lat": 23.2871,
+      "min_lon": 339.542,
+      "max_lon": 339.658,
+      "comment": "Spacing and arrangement of barchan dunes in Oyama Crater"
+    },
+    {
+      "product_id": "DTEEC_002074_2025_002140_2025_U01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/PSP/ORB_002000_002099/PSP_002074_2025_PSP_002140_2025/DTEEC_002074_2025_002140_2025_U01.IMG",
+      "obs_id_a": "PSP_002074_2025",
+      "obs_id_b": "PSP_002140_2025",
+      "min_lat": 22.2825,
+      "max_lat": 22.6256,
+      "min_lon": 341.702,
+      "max_lon": 341.848,
+      "comment": "Layering and dark mantle along tributary to Mawrth Vallis"
+    },
+    {
+      "product_id": "DTEEC_005964_2045_011884_2045_U01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/PSP/ORB_005900_005999/PSP_005964_2045_ESP_011884_2045/DTEEC_005964_2045_011884_2045_U01.IMG",
+      "obs_id_a": "PSP_005964_2045",
+      "obs_id_b": "ESP_011884_2045",
+      "min_lat": 23.8987,
+      "max_lat": 24.1513,
+      "min_lon": 340.993,
+      "max_lon": 341.133,
+      "comment": "Mawrth Vallis variations in mineralogy"
+    },
+    {
+      "product_id": "DTEEC_006676_2045_007612_2045_U01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/PSP/ORB_006600_006699/PSP_006676_2045_PSP_007612_2045/DTEEC_006676_2045_007612_2045_U01.IMG",
+      "obs_id_a": "PSP_006676_2045",
+      "obs_id_b": "PSP_007612_2045",
+      "min_lat": 23.8681,
+      "max_lat": 24.2097,
+      "min_lon": 341.096,
+      "max_lon": 341.246,
+      "comment": "Characterize surface hazards and science of possible MSL rover landing site"
+    },
+    {
+      "product_id": "DTEEC_007599_2020_007454_2020_U01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/PSP/ORB_007500_007599/PSP_007599_2020_PSP_007454_2020/DTEEC_007599_2020_007454_2020_U01.IMG",
+      "obs_id_a": "PSP_007599_2020",
+      "obs_id_b": "PSP_007454_2020",
+      "min_lat": 21.5548,
+      "max_lat": 21.8077,
+      "min_lon": 337.698,
+      "max_lon": 337.8303,
+      "comment": "Mawrth Vallis phyllosilicates"
+    },
+    {
+      "product_id": "DTEEC_008469_2040_008825_2040_U01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/PSP/ORB_008400_008499/PSP_008469_2040_PSP_008825_2040/DTEEC_008469_2040_008825_2040_U01.IMG",
+      "obs_id_a": "PSP_008469_2040",
+      "obs_id_b": "PSP_008825_2040",
+      "min_lat": 23.7662,
+      "max_lat": 24.1594,
+      "min_lon": 340.884,
+      "max_lon": 341.042,
+      "comment": "Characterize surface hazards and science of possible MSL rover landing site"
+    },
+    {
+      "product_id": "DTEEC_010816_2040_010882_2040_U01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/PSP/ORB_010800_010899/PSP_010816_2040_PSP_010882_2040/DTEEC_010816_2040_010882_2040_U01.IMG",
+      "obs_id_a": "PSP_010816_2040",
+      "obs_id_b": "PSP_010882_2040",
+      "min_lat": 23.8019,
+      "max_lat": 24.1014,
+      "min_lon": 340.793,
+      "max_lon": 340.938,
+      "comment": "Possible MSL landing site Mawrth Vallis"
+    },
+    {
+      "product_id": "DTEEC_036305_2025_035804_2025_L01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_036300_036399/ESP_036305_2025_ESP_035804_2025/DTEEC_036305_2025_035804_2025_L01.IMG",
+      "obs_id_a": "ESP_036305_2025",
+      "obs_id_b": "ESP_035804_2025",
+      "min_lat": 22.0101,
+      "max_lat": 22.434,
+      "min_lon": 341.5144,
+      "max_lon": 341.6631,
+      "comment": "Mawrth Vallis region"
+    },
+    {
+      "product_id": "DTEEC_036925_1985_037558_1985_L01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_036900_036999/ESP_036925_1985_ESP_037558_1985/DTEEC_036925_1985_037558_1985_L01.IMG",
+      "obs_id_a": "ESP_036925_1985",
+      "obs_id_b": "ESP_037558_1985",
+      "min_lat": 18.0582,
+      "max_lat": 18.3497,
+      "min_lon": 335.514,
+      "max_lon": 335.6377,
+      "comment": "Candidate future landing site"
+    },
+    {
+      "product_id": "DTEEC_003195_1985_002694_1985_L01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/PSP/ORB_003100_003199/PSP_003195_1985_PSP_002694_1985/DTEEC_003195_1985_002694_1985_L01.IMG",
+      "obs_id_a": "PSP_003195_1985",
+      "obs_id_b": "PSP_002694_1985",
+      "min_lat": 18.1488,
+      "max_lat": 18.3461,
+      "min_lon": 335.7848,
+      "max_lon": 335.9062,
+      "comment": "Alluvial fan in Arabia Terra"
+    },
+    {
+      "product_id": "DTEEC_009880_1985_009735_1985_L01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/PSP/ORB_009800_009899/PSP_009880_1985_PSP_009735_1985/DTEEC_009880_1985_009735_1985_L01.IMG",
+      "obs_id_a": "PSP_009880_1985",
+      "obs_id_b": "PSP_009735_1985",
+      "min_lat": 18.0401,
+      "max_lat": 18.3569,
+      "min_lon": 335.4073,
+      "max_lon": 335.5441,
+      "comment": "Clay bearing unit in western Arabia region"
+    },
+    {
+      "product_id": "DTEEC_037070_1985_037136_1985_L01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_037000_037099/ESP_037070_1985_ESP_037136_1985/DTEEC_037070_1985_037136_1985_L01.IMG",
+      "obs_id_a": "ESP_037070_1985",
+      "obs_id_b": "ESP_037136_1985",
+      "min_lat": 17.9273,
+      "max_lat": 18.3452,
+      "min_lon": 335.989,
+      "max_lon": 336.199,
+      "comment": "Candidate ExoMars landing site"
+    },
+    {
+      "product_id": "DTEEC_039299_1985_047501_1985_L01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_039200_039299/ESP_039299_1985_ESP_047501_1985/DTEEC_039299_1985_047501_1985_L01.IMG",
+      "obs_id_a": "ESP_039299_1985",
+      "obs_id_b": "ESP_047501_1985",
+      "min_lat": 18.0285,
+      "max_lat": 18.4099,
+      "min_lon": 335.6104,
+      "max_lon": 335.7314,
+      "comment": "Candidate ExoMars landing site"
+    },
+    {
+      "product_id": "DTEEC_042134_1985_053962_1985_L01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_042100_042199/ESP_042134_1985_ESP_053962_1985/DTEEC_042134_1985_053962_1985_L01.IMG",
+      "obs_id_a": "ESP_042134_1985",
+      "obs_id_b": "ESP_053962_1985",
+      "min_lat": 17.9176,
+      "max_lat": 18.1665,
+      "min_lon": 335.8262,
+      "max_lon": 335.9398,
+      "comment": "Oxia Palus region"
+    },
+    {
+      "product_id": "DTEEC_046103_2030_052129_2030_L01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_046100_046199/ESP_046103_2030_ESP_052129_2030/DTEEC_046103_2030_052129_2030_L01.IMG",
+      "obs_id_a": "ESP_046103_2030",
+      "obs_id_b": "ESP_052129_2030",
+      "min_lat": 22.788,
+      "max_lat": 22.9855,
+      "min_lon": 340.7245,
+      "max_lon": 340.84,
+      "comment": "Candidate ExoMars landing site in Mawrth Vallis"
+    },
+    {
+      "product_id": "DTEEC_058380_1985_040921_1985_H01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_058300_058399/ESP_058380_1985_ESP_040921_1985/DTEEC_058380_1985_040921_1985_H01.IMG",
+      "obs_id_a": "ESP_058380_1985",
+      "obs_id_b": "ESP_040921_1985",
+      "min_lat": 18.0588,
+      "max_lat": 18.3233,
+      "min_lon": 335.2396,
+      "max_lon": 335.3553,
+      "comment": "Candidate ExoMars landing site in Oxia Palus"
+    },
+    {
+      "product_id": "DTEEC_063839_1980_064261_1980_H01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_063800_063899/ESP_063839_1980_ESP_064261_1980/DTEEC_063839_1980_064261_1980_H01.IMG",
+      "obs_id_a": "ESP_063839_1980",
+      "obs_id_b": "ESP_064261_1980",
+      "min_lat": 17.7114,
+      "max_lat": 17.953,
+      "min_lon": 335.9601,
+      "max_lon": 336.0632,
+      "comment": "Candidate ExoMars landing site in Oxia Planum"
+    },
+    {
+      "product_id": "DTEEC_073467_2010_073533_2010_A01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_073400_073499/ESP_073467_2010_ESP_073533_2010/DTEEC_073467_2010_073533_2010_A01.IMG",
+      "obs_id_a": "ESP_073467_2010",
+      "obs_id_b": "ESP_073533_2010",
+      "min_lat": 20.7939,
+      "max_lat": 20.912,
+      "min_lon": 342.4678,
+      "max_lon": 342.5723,
+      "comment": "Dune monitoring in candidate ExoMars landing site in Mawrth Vallis"
+    },
+    {
+      "product_id": "DTEEC_040512_2020_040156_2020_A01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_040500_040599/ESP_040512_2020_ESP_040156_2020/DTEEC_040512_2020_040156_2020_A01.IMG",
+      "obs_id_a": "ESP_040512_2020",
+      "obs_id_b": "ESP_040156_2020",
+      "min_lat": 21.5614,
+      "max_lat": 21.8629,
+      "min_lon": 337.8009,
+      "max_lon": 337.9366,
+      "comment": "Candidate landing site for 2020 mission in McLaughlin Crater"
+    },
+    {
+      "product_id": "DTEED_070883_1970_062547_1970_A01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_070800_070899/ESP_070883_1970_ESP_062547_1970/DTEED_070883_1970_062547_1970_A01.IMG",
+      "obs_id_a": "ESP_070883_1970",
+      "obs_id_b": "ESP_062547_1970",
+      "min_lat": 16.773,
+      "max_lat": 17.3389,
+      "min_lon": 335.6828,
+      "max_lon": 335.8344,
+      "comment": "Depressions near Coogoon Valles"
+    },
+    {
+      "product_id": "DTEED_051153_2025_053777_2025_A01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/ESP/ORB_051100_051199/ESP_051153_2025_ESP_053777_2025/DTEED_051153_2025_053777_2025_A01.IMG",
+      "obs_id_a": "ESP_051153_2025",
+      "obs_id_b": "ESP_053777_2025",
+      "min_lat": 22.215,
+      "max_lat": 22.4749,
+      "min_lon": 342.5435,
+      "max_lon": 342.6739,
+      "comment": "Alunite in Mawrth Vallis"
+    },
+    {
+      "product_id": "DTEEC_006755_2030_011383_2030_A01",
+      "dtm_url": "https://hirise.lpl.arizona.edu/PDS/DTM/PSP/ORB_006700_006799/PSP_006755_2030_ESP_011383_2030/DTEEC_006755_2030_011383_2030_A01.IMG",
+      "obs_id_a": "PSP_006755_2030",
+      "obs_id_b": "ESP_011383_2030",
+      "min_lat": 22.7778,
+      "max_lat": 23.123,
+      "min_lon": 341.4817,
+      "max_lon": 341.6281,
+      "comment": "Crater on floor of Mawrth Vallis channel"
+    }
+  ]
+}

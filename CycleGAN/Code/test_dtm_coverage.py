@@ -3,6 +3,8 @@ from dtm_coverage import (
     build_ode_dtm_query_url,
     DtmCoverageRecord,
     parse_ode_response,
+    signed_lon_to_0_360,
+    build_coverage_report,
 )
 
 SAMPLE_RESPONSE_MULTI = {
@@ -99,3 +101,36 @@ def test_parse_ode_response_single_product_not_wrapped_in_list():
 def test_parse_ode_response_no_products():
     records = parse_ode_response(SAMPLE_RESPONSE_EMPTY)
     assert records == []
+
+
+def test_signed_lon_to_0_360_negative():
+    assert signed_lon_to_0_360(-25.0) == 335.0
+    assert signed_lon_to_0_360(-15.0) == 345.0
+
+
+def test_signed_lon_to_0_360_positive_passthrough():
+    assert signed_lon_to_0_360(75.0) == 75.0
+
+
+def test_build_coverage_report_shape():
+    report = build_coverage_report(
+        region_name="oxia_planum",
+        lat_min=16.0, lat_max=24.0, lon_min=-25.0, lon_max=-15.0,
+        records=[
+            DtmCoverageRecord(
+                product_id="DTEEC_015985_2040_016262_2040_U01",
+                dtm_url="https://example/DTEEC.IMG",
+                obs_id_a="ESP_015985_2040", obs_id_b="ESP_016262_2040",
+                min_lat=23.6875, max_lat=23.9711,
+                min_lon=341.035, max_lon=341.178,
+                comment="test",
+            )
+        ],
+    )
+    assert report["region"] == "oxia_planum"
+    assert report["query_bounds"] == {
+        "min_lat": 16.0, "max_lat": 24.0,
+        "west_lon_360": 335.0, "east_lon_360": 345.0,
+    }
+    assert report["count"] == 1
+    assert report["records"][0]["obs_id_a"] == "ESP_015985_2040"
