@@ -1,6 +1,4 @@
-from pathlib import Path
-from unittest.mock import Mock, MagicMock
-import pytest
+from unittest.mock import Mock
 
 from fetch_hirise_dtm import parse_productfiles_html, fetch_dtm_and_orthos
 from dtm_coverage import DtmCoverageRecord
@@ -71,9 +69,19 @@ def test_fetch_dtm_and_orthos_success_path_prefers_a_variant(monkeypatch, tmp_pa
     assert "ESP_015985_2040" in result["ortho_paths"]
     assert "ESP_016262_2040" in result["ortho_paths"]
 
-    # Verify that _A_ variant was chosen (both observations have both _A_ and _C_ in fixture)
-    # The first call downloads DTM
-    assert mock_download.call_count >= 1
+    # Verify that _A_ variant was chosen for both observations
+    # Call sequence: DTM, obs_a ortho, obs_b ortho
+    assert mock_download.call_count == 3
+    calls = mock_download.call_args_list
+    # Call 0: DTM
+    assert calls[0][0][0] == SAMPLE_RECORD.dtm_url
+    # Call 1: obs_a ortho (should be _A_ variant)
+    assert "_A_" in calls[1][0][0]
+    assert "ESP_015985_2040" in calls[1][0][0]
+    # Call 2: obs_b ortho (should be _A_ variant)
+    assert "_A_" in calls[2][0][0]
+    assert "ESP_016262_2040" in calls[2][0][0]
+
     # Verify requests.get was called with the files_url
     mock_requests.assert_called_once()
     assert SAMPLE_RECORD.files_url in str(mock_requests.call_args)
