@@ -86,7 +86,8 @@ def process_dtm_product(record: DtmCoverageRecord, scratch_dir: Path,
         return {"product_id": record.product_id, "status": "ok", "crops_saved": saved}
     finally:
         dtm_path.unlink(missing_ok=True)
-        ortho_path.unlink(missing_ok=True)
+        for p in fetch_result["ortho_paths"].values():
+            Path(p).unlink(missing_ok=True)
 
 
 def _in_landing_region(rec: dict) -> bool:

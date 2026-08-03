@@ -59,7 +59,12 @@ def test_process_dtm_product_saves_qualifying_crops_and_cleans_up(tmp_path):
         mock_fetch.return_value = {
             "product_id": SAMPLE_RECORD.product_id, "status": "ok",
             "dtm_path": str(scratch_dir / "d.IMG"),
-            "ortho_paths": {"ESP_000000_1985": str(scratch_dir / "o.JP2")},
+            # fetch_dtm_and_orthos downloads one ortho per source observation
+            # in the stereo pair — two entries here, matching real usage.
+            "ortho_paths": {
+                "ESP_000000_1985": str(scratch_dir / "o1.JP2"),
+                "ESP_000001_1985": str(scratch_dir / "o2.JP2"),
+            },
         }
         mock_load.return_value = DtmArrays(
             heightmap=heightmap, albedo=albedo, pixel_scale_m=1.0,
@@ -69,7 +74,8 @@ def test_process_dtm_product_saves_qualifying_crops_and_cleans_up(tmp_path):
         # claims to have fetched, so cleanup has something real to remove.
         scratch_dir.mkdir(parents=True)
         (scratch_dir / "d.IMG").write_bytes(b"fake dtm")
-        (scratch_dir / "o.JP2").write_bytes(b"fake ortho")
+        (scratch_dir / "o1.JP2").write_bytes(b"fake ortho 1")
+        (scratch_dir / "o2.JP2").write_bytes(b"fake ortho 2")
 
         result = process_dtm_product(SAMPLE_RECORD, scratch_dir, staging_dir,
                                      n_crops=10, seed=0)
@@ -78,9 +84,13 @@ def test_process_dtm_product_saves_qualifying_crops_and_cleans_up(tmp_path):
     assert result["crops_saved"] > 0
     saved_files = list(staging_dir.glob(f"{SAMPLE_RECORD.product_id}_*.png"))
     assert len(saved_files) == result["crops_saved"]
-    # Raw downloaded files must be gone once this product's crops are extracted.
+    # Raw downloaded files must be gone once this product's crops are
+    # extracted — including BOTH orthos, not just the one used for
+    # rendering (fetch_dtm_and_orthos downloads one per source observation
+    # in the stereo pair; only cleaning up one leaks the other permanently).
     assert not (scratch_dir / "d.IMG").exists()
-    assert not (scratch_dir / "o.JP2").exists()
+    assert not (scratch_dir / "o1.JP2").exists()
+    assert not (scratch_dir / "o2.JP2").exists()
 
 
 def test_process_dtm_product_reports_fetch_failure(tmp_path):
