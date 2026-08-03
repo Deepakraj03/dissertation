@@ -12,6 +12,8 @@ import shutil
 import sys
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).parent))
 from dtm_coverage import DtmCoverageRecord
 from dtm_arrays import load_dtm_arrays
@@ -54,9 +56,10 @@ def process_dtm_product(record: DtmCoverageRecord, scratch_dir: Path,
                         staging_dir: Path, n_crops: int = 200,
                         seed: int = 0) -> dict:
     """Download record's DTM+ortho, render up to n_crops candidate ground
-    views at random camera positions, keep the ones passing the entropy
-    filter, save them to staging_dir, delete the raw downloaded files, and
-    return a status dict."""
+    views at random camera positions (oversampling n_crops*4 candidates and
+    skipping any that land on a NaN/nodata heightmap cell), keep the ones
+    passing the entropy filter, save them to staging_dir, delete the raw
+    downloaded files, and return a status dict."""
     fetch_result = fetch_dtm_and_orthos(record, scratch_dir, scratch_dir)
     if fetch_result["status"] != "ok":
         return {"product_id": record.product_id, "status": fetch_result["status"],
@@ -67,13 +70,24 @@ def process_dtm_product(record: DtmCoverageRecord, scratch_dir: Path,
 
     try:
         arrays = load_dtm_arrays(dtm_path, ortho_path)
-        positions = sample_camera_positions(
-            arrays.heightmap.shape, margin_px=35, n=n_crops, seed=seed,
-        )
 
         staging_dir.mkdir(parents=True, exist_ok=True)
+        # Oversample candidates 4x n_crops to compensate for both nodata-gap
+        # skips and entropy-filter rejections — mirrors the oversampling
+        # pattern already used by extract_qualifying_patches in
+        # hirise_fullres.py, rather than assuming every candidate qualifies.
+        positions = sample_camera_positions(
+            arrays.heightmap.shape, margin_px=35, n=n_crops * 4, seed=seed,
+        )
+
         saved = 0
+        nan_skipped = 0
         for i, (row, col, heading) in enumerate(positions):
+            if saved >= n_crops:
+                break
+            if np.isnan(arrays.heightmap[int(row), int(col)]):
+                nan_skipped += 1
+                continue
             crop = render_ground_view(
                 arrays.heightmap, arrays.albedo, arrays.pixel_scale_m,
                 camera_row=row, camera_col=col, heading_deg=heading,
@@ -83,7 +97,8 @@ def process_dtm_product(record: DtmCoverageRecord, scratch_dir: Path,
             save_patch(crop, staging_dir / f"{record.product_id}_p{i:04d}.png")
             saved += 1
 
-        return {"product_id": record.product_id, "status": "ok", "crops_saved": saved}
+        return {"product_id": record.product_id, "status": "ok",
+                "crops_saved": saved, "nan_skipped": nan_skipped}
     finally:
         dtm_path.unlink(missing_ok=True)
         for p in fetch_result["ortho_paths"].values():

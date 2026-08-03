@@ -68,37 +68,19 @@ def test_load_dtm_arrays_masks_nodata_to_nan(tmp_path):
     assert result.heightmap[5, 5] == pytest.approx(5.0)
 
 
-def test_load_dtm_arrays_resamples_correctly_despite_differing_datum_labels(tmp_path):
-    # Reproduces the real bug: HiRISE DTM and ortho products can share the
-    # same physical Mars-equirectangular projection but carry different
-    # DATUM labels in their CRS WKT (e.g. "D_MARS" vs "unnamed"), which can
-    # make PROJ silently fail the coordinate transform during reproject and
-    # zero-fill the destination instead of raising. Uses two CRS objects
-    # with matching projection parameters/bounds but different datum names,
-    # plus a non-constant source array, so a regression back to all-zero
-    # output is actually caught (constant-valued fixtures would not catch
-    # this, which is exactly how the original bug went undetected).
-    from rasterio.crs import CRS
-
-    dtm_crs = CRS.from_wkt(
-        'PROJCS["EQUIRECTANGULAR MARS",GEOGCS["GCS_MARS",'
-        'DATUM["D_MARS",SPHEROID["MARS_localRadius",3396190,0]],'
-        'PRIMEM["Reference_Meridian",0],UNIT["degree",0.0174532925199433]],'
-        'PROJECTION["Equirectangular"],PARAMETER["standard_parallel_1",0],'
-        'PARAMETER["central_meridian",0],PARAMETER["false_easting",0],'
-        'PARAMETER["false_northing",0],UNIT["metre",1]]'
-    )
-    ortho_crs = CRS.from_wkt(
-        'PROJCS["Equirectangular MARS",GEOGCS["GCS_MARS",'
-        'DATUM["unnamed",SPHEROID["unnamed",3396190,0]],'
-        'PRIMEM["Reference meridian",0],UNIT["degree",0.0174532925199433]],'
-        'PROJECTION["Equirectangular"],PARAMETER["latitude_of_origin",0],'
-        'PARAMETER["central_meridian",0],PARAMETER["false_easting",0],'
-        'PARAMETER["false_northing",0],UNIT["metre",1]]'
-    )
-
-    dtm_path = tmp_path / "dtm_datum.tif"
-    ortho_path = tmp_path / "ortho_datum.tif"
+def test_load_dtm_arrays_resample_path_preserves_real_variation(tmp_path):
+    # Guards against a regression back to an all-zero resampled ortho.
+    # Resampling no longer goes through rasterio.warp.reproject/CRS/PROJ at
+    # all (see _resample_ortho_to_dtm_grid) — it's direct affine-coordinate
+    # bilinear interpolation between the DTM's and ortho's own transforms.
+    # This test doesn't exercise any CRS-mismatch mechanism (there's no CRS
+    # involved in this code path any more); it just uses a non-constant
+    # source array, so a regression back to a degenerate all-zero (or
+    # otherwise flat) resample is actually caught — constant-valued
+    # fixtures would not catch this, which is exactly how the original
+    # reproject-based bug went undetected.
+    dtm_path = tmp_path / "dtm_variation.tif"
+    ortho_path = tmp_path / "ortho_variation.tif"
     dtm_arr = np.full((20, 20), 5.0, dtype=np.float32)
     rng = np.random.default_rng(0)
     ortho_arr = rng.integers(50, 200, size=(40, 40), dtype=np.uint8)
@@ -107,12 +89,12 @@ def test_load_dtm_arrays_resamples_correctly_despite_differing_datum_labels(tmp_
     transform_ortho = from_origin(0, 0, 1.0, 1.0)
     with rasterio.open(
         dtm_path, "w", driver="GTiff", height=20, width=20, count=1,
-        dtype=np.float32, transform=transform_dtm, crs=dtm_crs,
+        dtype=np.float32, transform=transform_dtm,
     ) as dst:
         dst.write(dtm_arr, 1)
     with rasterio.open(
         ortho_path, "w", driver="GTiff", height=40, width=40, count=1,
-        dtype=np.uint8, transform=transform_ortho, crs=ortho_crs,
+        dtype=np.uint8, transform=transform_ortho,
     ) as dst:
         dst.write(ortho_arr, 1)
 
@@ -123,3 +105,27 @@ def test_load_dtm_arrays_resamples_correctly_despite_differing_datum_labels(tmp_
     # variation from the non-constant source must be preserved.
     assert result.albedo.std() > 5.0
     assert result.albedo.max() > 0
+
+
+def test_resample_ortho_to_dtm_grid_correct_bilinear_values():
+    # A distinctive horizontal gradient (0, 10, 20, ..., 190 across 20
+    # columns) at higher resolution than the DTM grid, so we can verify the
+    # resampled DTM-grid values land at the geometrically correct positions
+    # and interpolate correctly, not just "some non-zero value."
+    from dtm_arrays import _resample_ortho_to_dtm_grid
+
+    ortho_arr = np.tile(np.arange(0, 200, 10, dtype=np.uint8), (20, 1))  # (20, 20), gradient along columns
+    ortho_transform = from_origin(0, 0, 1.0, 1.0)  # 1m/px, origin (0,0)
+    dtm_transform = from_origin(0, 0, 2.0, 2.0)    # 2m/px, same origin — every DTM pixel covers a 2x2 ortho block
+    dtm_shape = (10, 10)
+
+    result = _resample_ortho_to_dtm_grid(ortho_arr, ortho_transform, dtm_transform, dtm_shape)
+
+    assert result.shape == (10, 10)
+    assert result.std() > 5.0  # real spatial variation, not a flat fill
+    # DTM column 0 covers ortho columns 0-1 (gradient values 0,10) -> ~5
+    # DTM column 5 covers ortho columns 10-11 (gradient values 100,110) -> ~105
+    assert result[5, 0] == pytest.approx(5.0, abs=15.0)
+    assert result[5, 5] == pytest.approx(105.0, abs=15.0)
+    # Must be monotonically non-decreasing across columns (matches the source gradient)
+    assert (np.diff(result[5, :]) >= -1.0).all()

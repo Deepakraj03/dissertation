@@ -82,6 +82,9 @@ def test_process_dtm_product_saves_qualifying_crops_and_cleans_up(tmp_path):
 
     assert result["status"] == "ok"
     assert result["crops_saved"] > 0
+    # No NaN cells in this synthetic heightmap, so nothing should be skipped
+    # for landing on a nodata gap.
+    assert result["nan_skipped"] == 0
     saved_files = list(staging_dir.glob(f"{SAMPLE_RECORD.product_id}_*.png"))
     assert len(saved_files) == result["crops_saved"]
     # Raw downloaded files must be gone once this product's crops are
@@ -91,6 +94,47 @@ def test_process_dtm_product_saves_qualifying_crops_and_cleans_up(tmp_path):
     assert not (scratch_dir / "d.IMG").exists()
     assert not (scratch_dir / "o1.JP2").exists()
     assert not (scratch_dir / "o2.JP2").exists()
+
+
+def test_process_dtm_product_skips_nan_camera_positions_and_still_saves_crops(tmp_path):
+    # Real HiRISE DTMs commonly have interior nodata gaps (stereo-matching
+    # failures, shadows, etc.) that load_dtm_arrays now correctly surfaces
+    # as NaN cells (see the dtm_arrays.py nodata-masking fix). A camera
+    # position landing on one of these must be skipped rather than crashing
+    # render_ground_view, and process_dtm_product must still produce crops
+    # from the non-NaN half of the array.
+    scratch_dir = tmp_path / "scratch"
+    staging_dir = tmp_path / "staging"
+
+    rng = np.random.default_rng(0)
+    heightmap = rng.uniform(0, 5, size=(300, 300)).astype(np.float32)
+    heightmap[:, :150] = np.nan  # left half is an unmapped nodata gap
+    albedo = rng.integers(0, 255, size=(300, 300), dtype=np.uint8)
+
+    with patch("assemble_geometry_corpus.fetch_dtm_and_orthos") as mock_fetch, \
+         patch("assemble_geometry_corpus.load_dtm_arrays") as mock_load:
+        mock_fetch.return_value = {
+            "product_id": SAMPLE_RECORD.product_id, "status": "ok",
+            "dtm_path": str(scratch_dir / "d.IMG"),
+            "ortho_paths": {
+                "ESP_000000_1985": str(scratch_dir / "o1.JP2"),
+                "ESP_000001_1985": str(scratch_dir / "o2.JP2"),
+            },
+        }
+        mock_load.return_value = DtmArrays(
+            heightmap=heightmap, albedo=albedo, pixel_scale_m=1.0,
+        )
+        scratch_dir.mkdir(parents=True)
+        (scratch_dir / "d.IMG").write_bytes(b"fake dtm")
+        (scratch_dir / "o1.JP2").write_bytes(b"fake ortho 1")
+        (scratch_dir / "o2.JP2").write_bytes(b"fake ortho 2")
+
+        result = process_dtm_product(SAMPLE_RECORD, scratch_dir, staging_dir,
+                                     n_crops=10, seed=0)
+
+    assert result["status"] == "ok"
+    assert result["crops_saved"] > 0
+    assert result["nan_skipped"] > 0
 
 
 def test_process_dtm_product_reports_fetch_failure(tmp_path):
