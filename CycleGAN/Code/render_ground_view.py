@@ -53,7 +53,7 @@ def render_ground_view(heightmap: np.ndarray, albedo: np.ndarray,
     vfov_rad = math.radians(fov_deg)  # square FOV: horizontal == vertical
     center_row = output_size / 2.0
 
-    step_m = max(pixel_scale_m * 0.25, 0.1)
+    step_m = max(pixel_scale_m * 0.5, 0.1)
     n_steps = max(int(max_range_m / step_m), 1)
 
     for col in range(output_size):

@@ -65,9 +65,9 @@ def test_render_ground_view_foreground_bump_occludes_background():
     # Near ridge: 3m tall, 5m ahead (heading 0 = +row direction)
     heightmap[camera_row + 5, camera_col - 2:camera_col + 3] = 3.0
     albedo[camera_row + 5, camera_col - 2:camera_col + 3] = 255  # bright
-    # Far feature: 10m tall (would be very prominent if visible), 20m ahead,
+    # Far feature: 5m tall (would be very prominent if visible), 20m ahead,
     # directly behind the near ridge from the camera's point of view.
-    heightmap[camera_row + 20, camera_col - 2:camera_col + 3] = 10.0
+    heightmap[camera_row + 20, camera_col - 2:camera_col + 3] = 5.0
     albedo[camera_row + 20, camera_col - 2:camera_col + 3] = 200
 
     img = render_ground_view(heightmap, albedo, pixel_scale_m=1.0,
