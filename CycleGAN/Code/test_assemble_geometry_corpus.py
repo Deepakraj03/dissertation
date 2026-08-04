@@ -137,6 +137,52 @@ def test_process_dtm_product_skips_nan_camera_positions_and_still_saves_crops(tm
     assert result["nan_skipped"] > 0
 
 
+def test_process_dtm_product_skips_camera_position_adjacent_to_nan(tmp_path):
+    # Reproduces the real crash seen on the A4000 full-8-DTM run
+    # (product DTEEC_058380_1985_040921_1985_H01): a camera position whose
+    # OWN cell is not NaN can still make render_ground_view's bilinear_sample
+    # return NaN if a diagonal/adjacent cell is NaN, because IEEE-754
+    # multiplies a NaN neighbor by its (zero) interpolation weight and still
+    # gets NaN (0 * nan == nan), not 0. The single-cell pre-check
+    # `heightmap[int(row), int(col)]` doesn't see this, so it let the
+    # position through and render_ground_view raised unhandled. A checkerboard
+    # NaN pattern guarantees every non-NaN cell has a NaN neighbor, so any
+    # sampled camera position triggers this regardless of exact coordinates.
+    scratch_dir = tmp_path / "scratch"
+    staging_dir = tmp_path / "staging"
+
+    rng = np.random.default_rng(0)
+    heightmap = rng.uniform(0, 5, size=(300, 300)).astype(np.float32)
+    rows, cols = np.indices((300, 300))
+    heightmap[(rows + cols) % 2 == 1] = np.nan  # checkerboard nodata
+    albedo = rng.integers(0, 255, size=(300, 300), dtype=np.uint8)
+
+    with patch("assemble_geometry_corpus.fetch_dtm_and_orthos") as mock_fetch, \
+         patch("assemble_geometry_corpus.load_dtm_arrays") as mock_load:
+        mock_fetch.return_value = {
+            "product_id": SAMPLE_RECORD.product_id, "status": "ok",
+            "dtm_path": str(scratch_dir / "d.IMG"),
+            "ortho_paths": {
+                "ESP_000000_1985": str(scratch_dir / "o1.JP2"),
+                "ESP_000001_1985": str(scratch_dir / "o2.JP2"),
+            },
+        }
+        mock_load.return_value = DtmArrays(
+            heightmap=heightmap, albedo=albedo, pixel_scale_m=1.0,
+        )
+        scratch_dir.mkdir(parents=True)
+        (scratch_dir / "d.IMG").write_bytes(b"fake dtm")
+        (scratch_dir / "o1.JP2").write_bytes(b"fake ortho 1")
+        (scratch_dir / "o2.JP2").write_bytes(b"fake ortho 2")
+
+        # Must not raise — every candidate position here has a NaN neighbor.
+        result = process_dtm_product(SAMPLE_RECORD, scratch_dir, staging_dir,
+                                     n_crops=10, seed=0)
+
+    assert result["status"] == "ok"
+    assert result["nan_skipped"] > 0
+
+
 def test_process_dtm_product_reports_fetch_failure(tmp_path):
     with patch("assemble_geometry_corpus.fetch_dtm_and_orthos") as mock_fetch:
         mock_fetch.return_value = {

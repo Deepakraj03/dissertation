@@ -12,8 +12,6 @@ import shutil
 import sys
 from pathlib import Path
 
-import numpy as np
-
 sys.path.insert(0, str(Path(__file__).parent))
 from dtm_coverage import DtmCoverageRecord
 from dtm_arrays import load_dtm_arrays
@@ -57,9 +55,10 @@ def process_dtm_product(record: DtmCoverageRecord, scratch_dir: Path,
                         seed: int = 0) -> dict:
     """Download record's DTM+ortho, render up to n_crops candidate ground
     views at random camera positions (oversampling n_crops*4 candidates and
-    skipping any that land on a NaN/nodata heightmap cell), keep the ones
-    passing the entropy filter, save them to staging_dir, delete the raw
-    downloaded files, and return a status dict."""
+    skipping any render_ground_view rejects as unrenderable — on or adjacent
+    to a NaN/nodata heightmap cell), keep the ones passing the entropy
+    filter, save them to staging_dir, delete the raw downloaded files, and
+    return a status dict."""
     fetch_result = fetch_dtm_and_orthos(record, scratch_dir, scratch_dir)
     if fetch_result["status"] != "ok":
         return {"product_id": record.product_id, "status": fetch_result["status"],
@@ -85,13 +84,19 @@ def process_dtm_product(record: DtmCoverageRecord, scratch_dir: Path,
         for i, (row, col, heading) in enumerate(positions):
             if saved >= n_crops:
                 break
-            if np.isnan(arrays.heightmap[int(row), int(col)]):
+            # A single-cell heightmap check isn't sufficient: bilinear_sample
+            # can still return NaN from a neighboring cell even at an
+            # exact-integer camera position (IEEE-754 0 * nan == nan, not 0),
+            # so ask render_ground_view itself — the actual source of truth —
+            # rather than duplicating its NaN-neighborhood logic here.
+            try:
+                crop = render_ground_view(
+                    arrays.heightmap, arrays.albedo, arrays.pixel_scale_m,
+                    camera_row=row, camera_col=col, heading_deg=heading,
+                )
+            except ValueError:
                 nan_skipped += 1
                 continue
-            crop = render_ground_view(
-                arrays.heightmap, arrays.albedo, arrays.pixel_scale_m,
-                camera_row=row, camera_col=col, heading_deg=heading,
-            )
             if entropy(crop) < ENTROPY_TH:
                 continue
             save_patch(crop, staging_dir / f"{record.product_id}_p{i:04d}.png")
