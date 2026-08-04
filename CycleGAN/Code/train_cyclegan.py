@@ -20,6 +20,7 @@ Outputs:
 
 import argparse
 import csv
+import random
 import sys
 import time
 from pathlib import Path
@@ -69,11 +70,30 @@ class UnpairedDataset(Dataset):
         ])
 
     def __len__(self) -> int:
-        return max(len(self.files_a), len(self.files_b))
+        # An epoch is one pass through the SMALLER domain. Defining it by
+        # the larger domain instead would silently over-repeat the smaller
+        # one every epoch (e.g. the geometry corpus, at ~1/17th the size of
+        # the rover corpus, would be shown ~17x per epoch) with no way to
+        # tell from the training log alone.
+        return min(len(self.files_a), len(self.files_b))
 
     def __getitem__(self, idx: int):
-        img_a = Image.open(self.files_a[idx % len(self.files_a)])
-        img_b = Image.open(self.files_b[idx % len(self.files_b)])
+        # The smaller domain is indexed directly (idx already in range, one
+        # full pass per epoch, no repeats/skips). The larger domain is
+        # sampled independently at random each call rather than wrapped
+        # with idx % len(files) — a naive modulo wrap would permanently
+        # restrict it to only its first len(smaller domain) sorted files,
+        # discarding the rest of a much larger real corpus for all of
+        # training. Random sampling keeps its full range reachable across
+        # training instead.
+        if len(self.files_a) <= len(self.files_b):
+            path_a = self.files_a[idx]
+            path_b = self.files_b[random.randint(0, len(self.files_b) - 1)]
+        else:
+            path_a = self.files_a[random.randint(0, len(self.files_a) - 1)]
+            path_b = self.files_b[idx]
+        img_a = Image.open(path_a)
+        img_b = Image.open(path_b)
         return self.tf(img_a), self.tf(img_b)
 
 
