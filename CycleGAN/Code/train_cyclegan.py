@@ -157,9 +157,10 @@ def train(args):
     LOG_DIR.mkdir(exist_ok=True)
 
     # ── Dataset & loader ──────────────────────────────────────────────────────
+    domain_a_dir = Path(args.domain_a_dir) if args.domain_a_dir else DATA_HIRISE
     dataset = UnpairedDataset(
-        DATA_HIRISE / "train",
-        DATA_ROVER  / "train",
+        domain_a_dir / "train",
+        DATA_ROVER   / "train",
         size=args.img_size,
     )
     loader = DataLoader(
@@ -170,7 +171,7 @@ def train(args):
         pin_memory=(device.type == "cuda"),
         drop_last=True,
     )
-    print(f"Dataset: {len(dataset.files_a)} HiRISE + "
+    print(f"Dataset: {len(dataset.files_a)} domain-A ({domain_a_dir.name}) + "
           f"{len(dataset.files_b)} Rover patches → "
           f"{len(loader)} batches/epoch")
 
@@ -418,6 +419,11 @@ def parse_args():
                    help="Save sample images every N epochs")
     p.add_argument("--save-every",   type=int,   default=10,
                    help="Save checkpoint every N epochs")
+
+    # Data
+    p.add_argument("--domain-a-dir", type=str,  default=None,
+                   help="Override domain-A (nadir) directory "
+                        f"(default: {DATA_HIRISE})")
 
     # System
     p.add_argument("--workers",     type=int,   default=4,
