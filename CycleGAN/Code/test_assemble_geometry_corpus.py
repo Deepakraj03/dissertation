@@ -2,9 +2,12 @@ from unittest.mock import patch
 
 import numpy as np
 
-from assemble_geometry_corpus import process_dtm_product, sample_camera_positions
+from assemble_geometry_corpus import (
+    ground_entropy, process_dtm_product, sample_camera_positions,
+)
 from dtm_arrays import DtmArrays
 from dtm_coverage import DtmCoverageRecord
+from preprocess import ENTROPY_TH
 
 
 def test_sample_camera_positions_count_and_distinctness():
@@ -41,6 +44,30 @@ SAMPLE_RECORD = DtmCoverageRecord(
     min_lat=18.0, max_lat=18.1, min_lon=335.0, max_lon=335.1,
     comment="test", files_url="https://example/files",
 )
+
+
+def test_ground_entropy_ignores_sky_pixels():
+    # Reproduces the real problem found on the completed 8-DTM A4000 run:
+    # render_ground_view leaves any ray that never reaches terrain (every
+    # column's rows above the horizon) at sky_value=0 — for Oxia Planum's
+    # low-relief terrain this is often >50% of the frame, which dilutes
+    # whole-frame entropy below ENTROPY_TH even when the actually-rendered
+    # ground is well textured. A crop that's 55% flat black sky and 45%
+    # genuinely varied ground texture fails the plain entropy() check
+    # (whole-frame entropy ~4.4 bits, verified below ENTROPY_TH) but must
+    # pass once only the rendered ground pixels are considered.
+    rng = np.random.default_rng(0)
+    crop = np.zeros((256, 256), dtype=np.uint8)
+    crop[141:, :] = rng.integers(30, 220, size=(115, 256), dtype=np.uint8)
+
+    from preprocess import entropy
+    assert entropy(crop) < ENTROPY_TH  # whole-frame metric wrongly rejects this
+    assert ground_entropy(crop) >= ENTROPY_TH  # ground-only metric correctly accepts it
+
+
+def test_ground_entropy_all_sky_is_zero():
+    crop = np.zeros((256, 256), dtype=np.uint8)
+    assert ground_entropy(crop) == 0.0
 
 
 def test_process_dtm_product_saves_qualifying_crops_and_cleans_up(tmp_path):

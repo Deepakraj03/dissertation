@@ -12,6 +12,8 @@ import shutil
 import sys
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).parent))
 from dtm_coverage import DtmCoverageRecord
 from dtm_arrays import load_dtm_arrays
@@ -24,6 +26,20 @@ from preprocess import entropy, ENTROPY_TH, save_patch, split_and_move
 # the 8 products whose footprint overlaps this box.
 LANDING_LAT_MIN, LANDING_LAT_MAX = 17.5, 19.0
 LANDING_LON_MIN, LANDING_LON_MAX = 334.5, 336.5
+
+
+def ground_entropy(crop: np.ndarray, sky_value: int = 0) -> float:
+    """Shannon entropy of crop's pixel values, excluding sky_value pixels.
+    render_ground_view leaves every column's rows above the horizon (any ray
+    that never reaches terrain) at sky_value — for Oxia Planum's low-relief
+    terrain this can be over half the frame, which dilutes whole-frame
+    entropy() below ENTROPY_TH regardless of how textured the actually-
+    rendered ground is. This measures only the pixels render_ground_view
+    actually drew, matching what the quality filter is meant to assess."""
+    ground_pixels = crop[crop != sky_value]
+    if ground_pixels.size == 0:
+        return 0.0
+    return entropy(ground_pixels)
 
 
 def sample_camera_positions(heightmap_shape: tuple[int, int], margin_px: int,
@@ -97,7 +113,7 @@ def process_dtm_product(record: DtmCoverageRecord, scratch_dir: Path,
             except ValueError:
                 nan_skipped += 1
                 continue
-            if entropy(crop) < ENTROPY_TH:
+            if ground_entropy(crop) < ENTROPY_TH:
                 continue
             save_patch(crop, staging_dir / f"{record.product_id}_p{i:04d}.png")
             saved += 1
