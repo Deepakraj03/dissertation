@@ -151,10 +151,19 @@ def train(args):
     if device.type == "cuda":
         print(f"  GPU: {torch.cuda.get_device_name(0)}")
 
-    # Directories
-    CKPT_DIR.mkdir(exist_ok=True)
-    SAMPLE_DIR.mkdir(exist_ok=True)
-    LOG_DIR.mkdir(exist_ok=True)
+    # Directories — a run_name keeps parallel experiments (e.g. a loss-weight
+    # comparison) from overwriting each other's checkpoints/samples/logs.
+    if args.run_name:
+        ckpt_dir   = CKPT_DIR / args.run_name
+        sample_dir = SAMPLE_DIR / args.run_name
+        log_dir    = LOG_DIR / args.run_name
+        csv_path   = ROOT / f"training_log_{args.run_name}.csv"
+    else:
+        ckpt_dir, sample_dir, log_dir = CKPT_DIR, SAMPLE_DIR, LOG_DIR
+        csv_path = ROOT / "training_log.csv"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Dataset & loader ──────────────────────────────────────────────────────
     domain_a_dir = Path(args.domain_a_dir) if args.domain_a_dir else DATA_HIRISE
@@ -234,12 +243,11 @@ def train(args):
     writer = None
     try:
         from torch.utils.tensorboard import SummaryWriter
-        writer = SummaryWriter(LOG_DIR)
+        writer = SummaryWriter(log_dir)
     except ImportError:
         print("  TensorBoard not available — logging to CSV only")
 
     # ── CSV log ───────────────────────────────────────────────────────────────
-    csv_path = ROOT / "training_log.csv"
     csv_file = open(csv_path, "w", newline="")
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow(["epoch", "loss_G", "loss_D_H", "loss_D_R",
@@ -247,8 +255,8 @@ def train(args):
 
     print(f"\nStarting training: {args.epochs} epochs, "
           f"batch={args.batch}, λ_cyc={args.lambda_cyc}, λ_idt={args.lambda_idt}")
-    print(f"Checkpoints → {CKPT_DIR}")
-    print(f"Samples     → {SAMPLE_DIR}\n")
+    print(f"Checkpoints → {ckpt_dir}")
+    print(f"Samples     → {sample_dir}\n")
 
     global_step = start_epoch * len(loader)
 
@@ -363,12 +371,12 @@ def train(args):
                     real_H, real_R,
                     G_H2R(real_H), G_R2H(real_R),
                     G_R2H(G_H2R(real_H)), G_H2R(G_R2H(real_R)),
-                    SAMPLE_DIR / f"epoch_{epoch+1:03d}.png",
+                    sample_dir / f"epoch_{epoch+1:03d}.png",
                 )
 
         # Checkpoints
         if (epoch + 1) % args.save_every == 0 or epoch + 1 == args.epochs:
-            ckpt_path = CKPT_DIR / f"epoch_{epoch+1:03d}.pt"
+            ckpt_path = ckpt_dir / f"epoch_{epoch+1:03d}.pt"
             torch.save({
                 "epoch":   epoch,
                 "G_H2R":   G_H2R.state_dict(),
@@ -424,6 +432,10 @@ def parse_args():
     p.add_argument("--domain-a-dir", type=str,  default=None,
                    help="Override domain-A (nadir) directory "
                         f"(default: {DATA_HIRISE})")
+    p.add_argument("--run-name",    type=str,   default=None,
+                   help="Subdirectory name for checkpoints/samples/logs/CSV, "
+                        "so parallel experiments don't overwrite each other "
+                        "(default: none, uses the flat checkpoints/samples/logs dirs)")
 
     # System
     p.add_argument("--workers",     type=int,   default=4,
