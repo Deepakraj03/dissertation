@@ -45,8 +45,14 @@ def load_generator(checkpoint_path: Path, device: torch.device) -> Generator:
 def generate_all(generator: Generator, input_dir: Path, output_dir: Path,
                  device: torch.device, limit: int | None = None) -> int:
     """Run generator over every PNG in input_dir, save RGB outputs to
-    output_dir. Returns the number of images processed."""
+    output_dir. Returns the number of images processed. Clears any
+    pre-existing PNGs in output_dir first, so a prior run's leftovers can
+    never silently mix into this run's output (this exact contamination
+    already corrupted one FID measurement in this project's history)."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    for stale in output_dir.glob("*.png"):
+        stale.unlink()
+
     files = sorted(input_dir.glob("*.png"))
     if limit:
         files = files[:limit]
