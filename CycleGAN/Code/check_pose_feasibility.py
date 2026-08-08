@@ -19,7 +19,7 @@ from rover_localization import (
 )
 
 NAVCAM_DATA_BASE = "https://planetarydata.jpl.nasa.gov/img/data/msl/msl_navcam_raw/DATA"
-FULL_FRAME_LBL_RE = re.compile(r'href="(N[LR]A_\w+EDR_F\w+\.LBL)"')
+FULL_FRAME_LBL_RE = re.compile(r'href="(N[LR][AB]_\w+EDR_F\w+\.LBL)"')
 
 
 def list_navcam_products_for_sol(sol: int) -> list[str]:

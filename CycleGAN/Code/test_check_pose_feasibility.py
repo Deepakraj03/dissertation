@@ -17,15 +17,21 @@ def test_list_navcam_products_for_sol_extracts_full_frame_ids_only():
     <a href="NLA_401573345EDR_F0042100NCAM00307M1.LBL">...</a>
     <a href="NLA_401573345EDR_T0042100NCAM00307M1.LBL">...</a>
     <a href="NLA_401578433EDR_F0042100NCAM00308M1.LBL">...</a>
+    <a href="NLB_504037552EDR_F0520000NCAM00327M1.LBL">...</a>
+    <a href="NLB_504037552EDR_T0520000NCAM00327M1.LBL">...</a>
+    <a href="NRB_504037552EDR_F0520000NCAM00327M1.LBL">...</a>
     """
     with patch("check_pose_feasibility.requests.get",
                return_value=_mock_listing_response(html)):
         result = list_navcam_products_for_sol(46)
 
-    # "_F" (full frame) variants only, "_T" (thumbnail) excluded.
+    # "_F" (full frame) variants only, "_T" (thumbnail) excluded; both the
+    # "A" and "B" flight-string variants are matched.
     assert result == [
         "NLA_401573345EDR_F0042100NCAM00307M1",
         "NLA_401578433EDR_F0042100NCAM00308M1",
+        "NLB_504037552EDR_F0520000NCAM00327M1",
+        "NRB_504037552EDR_F0520000NCAM00327M1",
     ]
 
 
