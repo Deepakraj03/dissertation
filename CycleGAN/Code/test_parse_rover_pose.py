@@ -116,3 +116,30 @@ def test_fetch_and_parse_pose_returns_none_on_malformed_label():
             "BAD_PRODUCT_ID", sol=1, localization={(4, 2100): Mock()},
         )
     assert pose is None
+
+
+def test_fetch_and_parse_pose_returns_none_on_fetch_error():
+    # Network error (connection failure) case
+    import requests
+    with patch("parse_rover_pose.requests.get",
+               side_effect=requests.exceptions.ConnectionError("Network error")):
+        pose = fetch_and_parse_pose(
+            "NLA_401573345EDR_F0042100NCAM00307M1", sol=46,
+            localization={(4, 2100): Mock()},
+        )
+    assert pose is None
+
+
+def test_fetch_and_parse_pose_returns_none_on_http_error():
+    # HTTP error (e.g. 404 Not Found) case
+    import requests
+    resp = Mock()
+    resp.raise_for_status = Mock(
+        side_effect=requests.exceptions.HTTPError("404 Not Found")
+    )
+    with patch("parse_rover_pose.requests.get", return_value=resp):
+        pose = fetch_and_parse_pose(
+            "NLA_401573345EDR_F0042100NCAM00307M1", sol=46,
+            localization={(4, 2100): Mock()},
+        )
+    assert pose is None
