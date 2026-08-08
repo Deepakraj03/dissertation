@@ -28,6 +28,7 @@ CycleGAN/Data/eval/*
 !CycleGAN/Data/HiRISE_index/
 CycleGAN/Data/HiRISE_index/*
 !CycleGAN/Data/HiRISE_index/dtm_coverage_*.json
+!CycleGAN/Data/HiRISE_index/controlnet_phase1_feasibility_report.json
 DiffusionSR/Data/
 
 # Training artifacts (move machine-to-machine via rsync, not git)

@@ -1,0 +1,15 @@
+{
+  "gale_crater_dtm_count": 25,
+  "pose_feasibility": {
+    "sols_checked": [
+      46,
+      500,
+      1200,
+      2000,
+      3000
+    ],
+    "products_attempted": 4,
+    "products_parsed": 4,
+    "parse_success_rate": 1.0
+  }
+}
