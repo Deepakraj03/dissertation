@@ -2,6 +2,7 @@ import math
 from collections import namedtuple
 
 import pytest
+import pyproj
 import rasterio
 import numpy as np
 
@@ -50,31 +51,49 @@ def test_compass_heading_to_render_heading_standard_north_up_raster():
 
 
 def test_latlon_to_dtm_pixel_roundtrips_through_a_real_geotiff(tmp_path):
-    # Build a tiny real north-up GeoTIFF in a known equirectangular-like CRS
-    # so this test exercises the real rasterio/pyproj path, not a mock.
+    # Build a tiny real north-up GeoTIFF in a Mars equirectangular projected CRS
+    # (not geographic EPSG:4326) so this test exercises the real rasterio/pyproj
+    # CRS-transformation path, not a degenerate identity transform.
     dtm_path = tmp_path / "test_dtm.tif"
     width, height = 100, 100
-    pixel_size_deg = 0.001
-    top_left_lon, top_left_lat = 137.0, -4.0
-    transform = rasterio.transform.from_origin(
-        top_left_lon, top_left_lat, pixel_size_deg, pixel_size_deg,
+    pixel_size_m = 100.0  # 100m pixels
+
+    # Mars equirectangular CRS centered at (0, 0) with IAU mean radius
+    mars_eqc_proj_str = (
+        "+proj=eqc +lat_ts=0 +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 "
+        "+R=3396190 +units=m +no_defs"
     )
+    mars_crs = pyproj.CRS.from_proj4(mars_eqc_proj_str)
+
+    # Origin at a known point in projected coordinates (meters)
+    origin_x, origin_y = 1000000.0, -2000000.0
+    transform = rasterio.transform.from_origin(
+        origin_x, origin_y, pixel_size_m, pixel_size_m,
+    )
+
     data = np.zeros((height, width), dtype=np.float32)
     with rasterio.open(
         dtm_path, "w", driver="GTiff", height=height, width=width, count=1,
-        dtype=data.dtype, crs="EPSG:4326", transform=transform,
+        dtype=data.dtype, crs=mars_crs, transform=transform,
     ) as dst:
         dst.write(data, 1)
 
-    # Center of the raster: lon = top_left_lon + width/2*pixel_size,
-    #                        lat = top_left_lat - height/2*pixel_size
-    center_lon = top_left_lon + (width / 2) * pixel_size_deg
-    center_lat = top_left_lat - (height / 2) * pixel_size_deg
+    # Compute the center point in projected coordinates (meters)
+    center_x = origin_x + (width / 2) * pixel_size_m
+    center_y = origin_y - (height / 2) * pixel_size_m
 
+    # Transform back to lat/lon via pyproj to get exact coordinates
+    transformer_to_latlon = pyproj.Transformer.from_crs(
+        mars_crs, mars_crs.geodetic_crs, always_xy=True,
+    )
+    center_lon, center_lat = transformer_to_latlon.transform(center_x, center_y)
+
+    # Now call the function with these exact lat/lon values
     result = latlon_to_dtm_pixel(dtm_path, lat=center_lat, lon_signed=center_lon)
 
     assert result is not None
     row, col = result
+    # Should be near the center pixel; allow 1.0 pixel tolerance for rounding
     assert row == pytest.approx(height / 2, abs=1.0)
     assert col == pytest.approx(width / 2, abs=1.0)
 
