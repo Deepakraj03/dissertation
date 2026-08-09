@@ -18,12 +18,27 @@ def _make_pose(product_id, lat, lon):
                      compass_heading_deg=55.0)
 
 
-def _make_record(product_id, min_lat, max_lat, min_lon, max_lon):
+def _make_record(product_id, min_lat, max_lat, min_lon, max_lon,
+                 obs_id_a="", obs_id_b=""):
     return DtmCoverageRecord(
-        product_id=product_id, dtm_url="", obs_id_a="", obs_id_b="",
+        product_id=product_id, dtm_url="", obs_id_a=obs_id_a, obs_id_b=obs_id_b,
         min_lat=min_lat, max_lat=max_lat, min_lon=min_lon, max_lon=max_lon,
         comment="", files_url="",
     )
+
+
+def _write_fake_dtm_raster(path):
+    """process_dtm_group opens the DTM directly (unmocked) to read its
+    affine transform, so any fixture standing in for a real DTM must be a
+    raster rasterio can open — not opaque bytes. In production this is
+    always a freshly downloaded genuine DTM; only unit-test fixtures need
+    this."""
+    transform = rasterio.transform.from_origin(137.0, -4.0, 0.001, 0.001)
+    with rasterio.open(
+        path, "w", driver="GTiff", height=50, width=50,
+        count=1, dtype="float32", crs="EPSG:4326", transform=transform,
+    ) as dst:
+        dst.write(np.zeros((50, 50), dtype=np.float32), 1)
 
 
 def test_group_products_by_covering_dtm_groups_and_skips_uncovered():
@@ -49,16 +64,7 @@ def test_process_dtm_group_renders_and_saves_pairs(tmp_path, monkeypatch):
         "dtm_path": str(tmp_path / "DTM_A.IMG"),
         "ortho_paths": {"obs": str(tmp_path / "obs_ORTHO.JP2")},
     }
-    # process_dtm_group opens the DTM directly (unmocked) to read its
-    # affine transform, so this fixture must be a real raster rasterio can
-    # open — not opaque bytes. In production this is always a freshly
-    # downloaded genuine DTM; only the unit-test fixture needs this.
-    dtm_transform = rasterio.transform.from_origin(137.0, -4.0, 0.001, 0.001)
-    with rasterio.open(
-        tmp_path / "DTM_A.IMG", "w", driver="GTiff", height=50, width=50,
-        count=1, dtype="float32", crs="EPSG:4326", transform=dtm_transform,
-    ) as dst:
-        dst.write(np.zeros((50, 50), dtype=np.float32), 1)
+    _write_fake_dtm_raster(tmp_path / "DTM_A.IMG")
     (tmp_path / "obs_ORTHO.JP2").write_bytes(b"fake")
 
     fake_arrays = Mock(heightmap=np.zeros((50, 50), dtype=np.float32),
@@ -82,10 +88,97 @@ def test_process_dtm_group_renders_and_saves_pairs(tmp_path, monkeypatch):
 
     assert result["status"] == "ok"
     assert result["pairs_saved"] == 1
+    assert result["saved_ids"] == ["P1"]
     assert (out_dir / "P1_condition.png").exists()
     assert (out_dir / "P1_target.jpg").exists()
     # Raw DTM/ortho files deleted after processing.
     assert not (tmp_path / "DTM_A.IMG").exists()
+
+
+def test_process_dtm_group_saved_ids_reflect_actual_successes_not_position(
+        tmp_path, monkeypatch):
+    """Regression test: an earlier version of main() assumed the first N
+    poses in a group were the N poses that got saved (group_poses[:pairs_saved]).
+    That's wrong whenever a skip happens before a later success — this test
+    puts a pose that fails ahead of one that succeeds and checks saved_ids
+    names the actual survivor, not a positional slice."""
+    dtm_record = _make_record("DTM_A", -5.0, -4.0, 137.0, 138.0)
+    poses = [_make_pose("P1", lat=-4.5, lon=137.5),
+            _make_pose("P2", lat=-4.5, lon=137.5)]
+
+    fake_fetch_result = {
+        "product_id": "DTM_A", "status": "ok",
+        "dtm_path": str(tmp_path / "DTM_A.IMG"),
+        "ortho_paths": {"obs": str(tmp_path / "obs_ORTHO.JP2")},
+    }
+    _write_fake_dtm_raster(tmp_path / "DTM_A.IMG")
+    (tmp_path / "obs_ORTHO.JP2").write_bytes(b"fake")
+
+    fake_arrays = Mock(heightmap=np.zeros((50, 50), dtype=np.float32),
+                       albedo=np.full((50, 50), 100, dtype=np.uint8),
+                       pixel_scale_m=1.0)
+
+    def fake_fetch_target_photo(product_id, sol, dest_path):
+        if product_id == "P1":
+            return False  # P1's photo fetch fails — should be skipped
+        dest_path.write_bytes(b"\xff\xd8\xff fake jpg")
+        return True
+
+    monkeypatch.setattr("assemble_paired_corpus.fetch_dtm_and_orthos",
+                        lambda record, scratch, dest: fake_fetch_result)
+    monkeypatch.setattr("assemble_paired_corpus.load_dtm_arrays",
+                        lambda dtm_path, ortho_path: fake_arrays)
+    monkeypatch.setattr("assemble_paired_corpus.latlon_to_dtm_pixel",
+                        lambda dtm_path, lat, lon: (25.0, 25.0))
+    monkeypatch.setattr("assemble_paired_corpus.compass_heading_to_render_heading",
+                        lambda compass_deg, transform: 0.0)
+    monkeypatch.setattr("assemble_paired_corpus.fetch_target_photo",
+                        fake_fetch_target_photo)
+
+    out_dir = tmp_path / "out"
+    scratch_dir = tmp_path / "scratch"
+    result = process_dtm_group(dtm_record, poses, scratch_dir, out_dir)
+
+    assert result["pairs_saved"] == 1
+    assert result["saved_ids"] == ["P2"]
+    assert not (out_dir / "P1_condition.png").exists()
+    assert (out_dir / "P2_condition.png").exists()
+    assert (out_dir / "P2_target.jpg").exists()
+
+
+def test_process_dtm_group_cleans_up_raw_files_on_early_failure(
+        tmp_path, monkeypatch):
+    """fetch_dtm_and_orthos can fail after the DTM .IMG already downloaded
+    successfully (e.g. an ortho download fails) — its failure return dict
+    carries no dtm_path/ortho_paths keys in that case, so process_dtm_group
+    must fall back to the deterministic scratch_dir naming convention to
+    find and delete whatever raw files actually landed on disk."""
+    dtm_record = _make_record("DTM_A", -5.0, -4.0, 137.0, 138.0,
+                              obs_id_a="OBS_A", obs_id_b="OBS_B")
+    poses = [_make_pose("P1", lat=-4.5, lon=137.5)]
+
+    scratch_dir = tmp_path / "scratch"
+    scratch_dir.mkdir()
+    # Simulate what the real fetch_dtm_and_orthos leaves behind when the
+    # DTM and the first ortho downloaded fine but the second ortho failed.
+    (scratch_dir / "DTM_A.IMG").write_bytes(b"partial dtm bytes")
+    (scratch_dir / "OBS_A_ORTHO.JP2").write_bytes(b"partial ortho bytes")
+
+    monkeypatch.setattr(
+        "assemble_paired_corpus.fetch_dtm_and_orthos",
+        lambda record, scratch, dest: {
+            "product_id": "DTM_A", "status": "ortho_download_failed_for_OBS_B",
+        },
+    )
+
+    out_dir = tmp_path / "out"
+    result = process_dtm_group(dtm_record, poses, scratch_dir, out_dir)
+
+    assert result["status"] == "ortho_download_failed_for_OBS_B"
+    assert result["pairs_saved"] == 0
+    assert result["saved_ids"] == []
+    assert not (scratch_dir / "DTM_A.IMG").exists()
+    assert not (scratch_dir / "OBS_A_ORTHO.JP2").exists()
 
 
 def test_split_pairs_and_move_keeps_condition_and_target_together(tmp_path):

@@ -7,8 +7,8 @@ photo per group."""
 
 import argparse
 import csv
-import json
 import random
+import shutil
 import sys
 from pathlib import Path
 
@@ -56,22 +56,33 @@ def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
     """Download dtm_record's DTM+ortho once, render every pose in poses
     from its real (row, col, heading) on that DTM, fetch each pose's real
     target photo, save both to out_dir, then delete the raw DTM/ortho
-    files regardless of outcome."""
-    fetch_result = fetch_dtm_and_orthos(dtm_record, scratch_dir, scratch_dir)
-    if fetch_result["status"] != "ok":
-        return {"product_id": dtm_record.product_id,
-               "status": fetch_result["status"], "pairs_saved": 0}
-
-    dtm_path = Path(fetch_result["dtm_path"])
-    ortho_path = Path(next(iter(fetch_result["ortho_paths"].values())))
-
+    files regardless of outcome — including when fetch_dtm_and_orthos
+    fails partway (e.g. DTM downloaded fine but an ortho download fails),
+    which is why the expected raw file paths are computed up front from
+    scratch_dir's naming convention rather than only trusted from a
+    (possibly absent, on failure) fetch_result."""
+    expected_dtm_path = scratch_dir / f"{dtm_record.product_id}.IMG"
+    expected_ortho_paths = [
+        scratch_dir / f"{obs_id}_ORTHO.JP2"
+        for obs_id in (dtm_record.obs_id_a, dtm_record.obs_id_b) if obs_id
+    ]
+    fetch_result = {}
     try:
+        fetch_result = fetch_dtm_and_orthos(dtm_record, scratch_dir, scratch_dir)
+        if fetch_result["status"] != "ok":
+            return {"product_id": dtm_record.product_id,
+                   "status": fetch_result["status"], "pairs_saved": 0,
+                   "saved_ids": []}
+
+        dtm_path = Path(fetch_result["dtm_path"])
+        ortho_path = Path(next(iter(fetch_result["ortho_paths"].values())))
+
         arrays = load_dtm_arrays(dtm_path, ortho_path)
         with rasterio.open(dtm_path) as src:
             transform = src.transform
 
         out_dir.mkdir(parents=True, exist_ok=True)
-        saved = 0
+        saved_ids = []
         for pose in poses:
             pixel = latlon_to_dtm_pixel(dtm_path, pose.latitude, pose.longitude)
             if pixel is None:
@@ -93,13 +104,15 @@ def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
                 continue
 
             save_patch(condition_map, out_dir / f"{pose.product_id}_condition.png")
-            saved += 1
+            saved_ids.append(pose.product_id)
 
         return {"product_id": dtm_record.product_id, "status": "ok",
-               "pairs_saved": saved}
+               "pairs_saved": len(saved_ids), "saved_ids": saved_ids}
     finally:
-        dtm_path.unlink(missing_ok=True)
-        for p in fetch_result["ortho_paths"].values():
+        Path(fetch_result.get("dtm_path", expected_dtm_path)).unlink(missing_ok=True)
+        ortho_paths_to_clean = list(fetch_result.get("ortho_paths", {}).values()) \
+            or expected_ortho_paths
+        for p in ortho_paths_to_clean:
             Path(p).unlink(missing_ok=True)
 
 
@@ -122,10 +135,10 @@ def split_pairs_and_move(product_ids: list[str], staging_dir: Path,
         split_dir = out_dir / split_name
         split_dir.mkdir(parents=True, exist_ok=True)
         for pid in split_ids:
-            (staging_dir / f"{pid}_condition.png").rename(
-                split_dir / f"{pid}_condition.png")
-            (staging_dir / f"{pid}_target.jpg").rename(
-                split_dir / f"{pid}_target.jpg")
+            shutil.move(str(staging_dir / f"{pid}_condition.png"),
+                       str(split_dir / f"{pid}_condition.png"))
+            shutil.move(str(staging_dir / f"{pid}_target.jpg"),
+                       str(split_dir / f"{pid}_target.jpg"))
     return {"total_pairs": n,
            "split_counts": {k: len(v) for k, v in splits.items()}}
 
@@ -183,8 +196,7 @@ def main():
         result = process_dtm_group(record, group_poses, scratch_dir, staging_dir)
         print(f"  {result['status']} — {result.get('pairs_saved', 0)} pairs")
         manifest.append(result)
-        if result["status"] == "ok":
-            saved_ids.extend(p.product_id for p in group_poses[:result["pairs_saved"]])
+        saved_ids.extend(result.get("saved_ids", []))
 
     split_counts = split_pairs_and_move(saved_ids, staging_dir, out_dir)
     print(f"\nFinal split: {split_counts}")
