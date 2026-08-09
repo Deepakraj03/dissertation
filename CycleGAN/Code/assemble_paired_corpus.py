@@ -22,10 +22,11 @@ from download_hirise import REGIONS
 from fetch_hirise_dtm import fetch_dtm_and_orthos
 from hirise_fullres import download_with_verify
 from parse_rover_pose import RoverPose, fetch_and_parse_pose
-from preprocess import save_patch
+from preprocess import save_patch, ENTROPY_TH
 from render_ground_view import render_ground_view
 from rover_localization import download_localization_csv, parse_localization_csv
 from check_pose_feasibility import list_navcam_products_for_sol
+from assemble_geometry_corpus import ground_entropy
 
 import rasterio
 
@@ -97,6 +98,14 @@ def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
                     camera_row=row, camera_col=col, heading_deg=heading,
                 )
             except ValueError:
+                continue
+
+            if ground_entropy(condition_map) < ENTROPY_TH:
+                # Uninformative render: either genuine sky, or real terrain
+                # sitting in a gap the chosen ortho doesn't cover (both
+                # paint as sky_value=0 — see dtm_arrays.py's ortho-resample
+                # nodata fill). Skip before spending a network call on the
+                # target photo for a candidate we're about to discard.
                 continue
 
             target_path = out_dir / f"{pose.product_id}_target.jpg"

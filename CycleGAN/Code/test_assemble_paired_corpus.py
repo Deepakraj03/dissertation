@@ -27,6 +27,19 @@ def _make_record(product_id, min_lat, max_lat, min_lon, max_lon,
     )
 
 
+def _make_varied_arrays(shape=(50, 50), seed=0):
+    """A heightmap/albedo pair with enough real variation that render_ground_view's
+    output clears ENTROPY_TH — same rng-based construction test_assemble_geometry_corpus.py
+    already uses for this. A flat/constant fixture would render as a
+    uniform (single-value) condition map, which is exactly what the new
+    ground_entropy filter is meant to reject, so tests exercising a normal
+    save need real texture, not a flat mock."""
+    rng = np.random.default_rng(seed)
+    heightmap = rng.uniform(0, 5, size=shape).astype(np.float32)
+    albedo = rng.integers(0, 255, size=shape, dtype=np.uint8)
+    return Mock(heightmap=heightmap, albedo=albedo, pixel_scale_m=1.0)
+
+
 def _write_fake_dtm_raster(path):
     """process_dtm_group opens the DTM directly (unmocked) to read its
     affine transform, so any fixture standing in for a real DTM must be a
@@ -67,9 +80,7 @@ def test_process_dtm_group_renders_and_saves_pairs(tmp_path, monkeypatch):
     _write_fake_dtm_raster(tmp_path / "DTM_A.IMG")
     (tmp_path / "obs_ORTHO.JP2").write_bytes(b"fake")
 
-    fake_arrays = Mock(heightmap=np.zeros((50, 50), dtype=np.float32),
-                       albedo=np.full((50, 50), 100, dtype=np.uint8),
-                       pixel_scale_m=1.0)
+    fake_arrays = _make_varied_arrays()
 
     monkeypatch.setattr("assemble_paired_corpus.fetch_dtm_and_orthos",
                         lambda record, scratch, dest: fake_fetch_result)
@@ -114,9 +125,7 @@ def test_process_dtm_group_saved_ids_reflect_actual_successes_not_position(
     _write_fake_dtm_raster(tmp_path / "DTM_A.IMG")
     (tmp_path / "obs_ORTHO.JP2").write_bytes(b"fake")
 
-    fake_arrays = Mock(heightmap=np.zeros((50, 50), dtype=np.float32),
-                       albedo=np.full((50, 50), 100, dtype=np.uint8),
-                       pixel_scale_m=1.0)
+    fake_arrays = _make_varied_arrays()
 
     def fake_fetch_target_photo(product_id, sol, dest_path):
         if product_id == "P1":
@@ -144,6 +153,57 @@ def test_process_dtm_group_saved_ids_reflect_actual_successes_not_position(
     assert not (out_dir / "P1_condition.png").exists()
     assert (out_dir / "P2_condition.png").exists()
     assert (out_dir / "P2_target.jpg").exists()
+
+
+def test_process_dtm_group_skips_low_entropy_renders(tmp_path, monkeypatch):
+    """A rendered condition map below ENTROPY_TH — whether genuine sky or
+    real terrain sitting in a no-ortho-coverage gap that also paints as
+    sky_value=0 (the real corpus's actual 80%-blank problem) — must be
+    skipped: not saved, and its product_id absent from saved_ids. Mocks
+    render_ground_view directly to a known-uniform array so this isolates
+    the entropy-filter decision itself from the rendering geometry."""
+    dtm_record = _make_record("DTM_A", -5.0, -4.0, 137.0, 138.0)
+    poses = [_make_pose("P1", lat=-4.5, lon=137.5)]
+
+    fake_fetch_result = {
+        "product_id": "DTM_A", "status": "ok",
+        "dtm_path": str(tmp_path / "DTM_A.IMG"),
+        "ortho_paths": {"obs": str(tmp_path / "obs_ORTHO.JP2")},
+    }
+    _write_fake_dtm_raster(tmp_path / "DTM_A.IMG")
+    (tmp_path / "obs_ORTHO.JP2").write_bytes(b"fake")
+
+    photo_fetch_calls = []
+
+    def fake_fetch_target_photo(product_id, sol, dest_path):
+        photo_fetch_calls.append(product_id)
+        dest_path.write_bytes(b"\xff\xd8\xff fake jpg")
+        return True
+
+    monkeypatch.setattr("assemble_paired_corpus.fetch_dtm_and_orthos",
+                        lambda record, scratch, dest: fake_fetch_result)
+    monkeypatch.setattr("assemble_paired_corpus.load_dtm_arrays",
+                        lambda dtm_path, ortho_path: _make_varied_arrays())
+    monkeypatch.setattr("assemble_paired_corpus.latlon_to_dtm_pixel",
+                        lambda dtm_path, lat, lon: (25.0, 25.0))
+    monkeypatch.setattr("assemble_paired_corpus.compass_heading_to_render_heading",
+                        lambda compass_deg, transform: 0.0)
+    monkeypatch.setattr("assemble_paired_corpus.render_ground_view",
+                        lambda *args, **kwargs: np.zeros((256, 256), dtype=np.uint8))
+    monkeypatch.setattr("assemble_paired_corpus.fetch_target_photo",
+                        fake_fetch_target_photo)
+
+    out_dir = tmp_path / "out"
+    scratch_dir = tmp_path / "scratch"
+    result = process_dtm_group(dtm_record, poses, scratch_dir, out_dir)
+
+    assert result["status"] == "ok"
+    assert result["pairs_saved"] == 0
+    assert result["saved_ids"] == []
+    assert not (out_dir / "P1_condition.png").exists()
+    assert not (out_dir / "P1_target.jpg").exists()
+    # Skipped before the network call for the target photo, not after.
+    assert photo_fetch_calls == []
 
 
 def test_process_dtm_group_cleans_up_raw_files_on_early_failure(
