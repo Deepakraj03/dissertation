@@ -12,15 +12,16 @@ from dtm_geo_lookup import (
 from dtm_coverage import DtmCoverageRecord
 
 
-def _make_record(product_id, min_lat, max_lat, min_lon, max_lon):
+def _make_record(product_id, min_lat, max_lat, min_lon, max_lon, footprint_wkt=""):
     return DtmCoverageRecord(
         product_id=product_id, dtm_url="", obs_id_a="", obs_id_b="",
         min_lat=min_lat, max_lat=max_lat, min_lon=min_lon, max_lon=max_lon,
-        comment="", files_url="",
+        comment="", files_url="", footprint_wkt=footprint_wkt,
     )
 
 
 def test_find_covering_dtm_returns_matching_record():
+    # No footprint_wkt -- falls back to the bbox test.
     records = [
         _make_record("A", min_lat=-5.0, max_lat=-4.0, min_lon=137.0, max_lon=138.0),
         _make_record("B", min_lat=10.0, max_lat=11.0, min_lon=140.0, max_lon=141.0),
@@ -33,6 +34,49 @@ def test_find_covering_dtm_returns_none_when_uncovered():
     records = [_make_record("A", min_lat=-5.0, max_lat=-4.0, min_lon=137.0, max_lon=138.0)]
     result = find_covering_dtm(lat=20.0, lon_signed=50.0, records=records)
     assert result is None
+
+
+# Real footprint for DTEEC_018854_1755_018920_1755_U01 (fetched 2026-08-09
+# from PDS ODE) -- a narrow rotated strip, much smaller than its own
+# axis-aligned bounding box. This is the real 2026-08-09 finding: a bbox-only
+# test accepted real rover positions that sat in the bbox's "empty corners",
+# outside the strip -- explaining why this DTM group produced 0 pairs across
+# 3 real runs (0/24, 0/86, 0/116 candidates) despite escalating candidate
+# density.
+REAL_STRIP_FOOTPRINT = (
+    "POLYGON ((137.336 -4.4693, 137.427 -4.458, 137.457 -4.7034, "
+    "137.366 -4.7142, 137.336 -4.4693))"
+)
+
+
+def test_find_covering_dtm_rejects_bbox_corner_outside_real_footprint():
+    records = [_make_record("A", min_lat=-4.7142, max_lat=-4.458,
+                            min_lon=137.336, max_lon=137.457,
+                            footprint_wkt=REAL_STRIP_FOOTPRINT)]
+    # Inside the bbox, but in the strip's empty NE corner -- a bbox-only
+    # test would wrongly accept this.
+    result = find_covering_dtm(lat=-4.46, lon_signed=137.45, records=records)
+    assert result is None
+
+
+def test_find_covering_dtm_accepts_point_truly_inside_real_footprint():
+    records = [_make_record("A", min_lat=-4.7142, max_lat=-4.458,
+                            min_lon=137.336, max_lon=137.457,
+                            footprint_wkt=REAL_STRIP_FOOTPRINT)]
+    result = find_covering_dtm(lat=-4.58, lon_signed=137.40, records=records)
+    assert result.product_id == "A"
+
+
+def test_find_covering_dtm_falls_back_to_bbox_when_footprint_missing():
+    # footprint_wkt="" (e.g. ODE response missing the field) must not
+    # crash, and must still match via the bbox test -- same point that's
+    # bbox-valid but would be footprint-invalid for the record above,
+    # proving this really is the bbox fallback and not an accidental pass.
+    records = [_make_record("A", min_lat=-4.7142, max_lat=-4.458,
+                            min_lon=137.336, max_lon=137.457,
+                            footprint_wkt="")]
+    result = find_covering_dtm(lat=-4.46, lon_signed=137.45, records=records)
+    assert result.product_id == "A"
 
 
 def test_compass_heading_to_render_heading_standard_north_up_raster():

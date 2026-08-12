@@ -13,6 +13,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+# dtm_coverage.py, dtm_arrays.py, download_hirise.py, fetch_hirise_dtm.py,
+# hirise_fullres.py, preprocess.py, render_ground_view.py, and
+# assemble_geometry_corpus.py are shared HiRISE/DTM infrastructure that
+# stays in CycleGAN/Code (also used by CycleGAN's own Track 2 geometry
+# corpus) -- bridge to it rather than duplicating it into ControlNet/Code.
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "CycleGAN" / "Code"))
 from dtm_coverage import DtmCoverageRecord, query_dtm_coverage, signed_lon_to_0_360
 from dtm_arrays import load_dtm_arrays
 from dtm_geo_lookup import (
@@ -31,6 +37,17 @@ from assemble_geometry_corpus import ground_entropy
 import rasterio
 
 NAVCAM_JPG_BASE = "https://planetarydata.jpl.nasa.gov/img/data/msl/msl_navcam_raw/EXTRAS/FULL"
+
+# Found 2026-08-09: even with correct pitch modeling (render_ground_view's
+# pitch_deg), a real steep down-look pose (close range) renders as a
+# low-detail, DTM-resolution-limited "shelf" pattern that doesn't match the
+# real photo's fine near-field detail -- a spatial-resolution mismatch
+# between the ~1m/px HiRISE DTM and cm-scale close-range content, not
+# something the entropy filter alone catches (both real examples that
+# exposed this passed entropy). Most real Navcam full-frame poses are
+# steeper than this (median real elevation ~-38 deg, see the 2026-08-09
+# candidate survey), so this trades corpus yield for per-pair fidelity.
+MAX_ABS_PITCH_DEG = 20.0
 
 
 def fetch_target_photo(product_id: str, sol: int, dest_path: Path) -> bool:
@@ -85,6 +102,8 @@ def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
         out_dir.mkdir(parents=True, exist_ok=True)
         saved_ids = []
         for pose in poses:
+            if abs(pose.pitch_deg) > MAX_ABS_PITCH_DEG:
+                continue
             pixel = latlon_to_dtm_pixel(dtm_path, pose.latitude, pose.longitude)
             if pixel is None:
                 continue
@@ -96,6 +115,7 @@ def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
                 condition_map = render_ground_view(
                     arrays.heightmap, arrays.albedo, arrays.pixel_scale_m,
                     camera_row=row, camera_col=col, heading_deg=heading,
+                    pitch_deg=pose.pitch_deg,
                 )
             except ValueError:
                 continue

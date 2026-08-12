@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+# hirise_fullres.py is shared infrastructure that stays in CycleGAN/Code.
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "CycleGAN" / "Code"))
 from hirise_fullres import download_with_verify
 
 LOCALIZATION_CSV_URL = (

@@ -12,10 +12,10 @@ from parse_rover_pose import RoverPose
 from dtm_coverage import DtmCoverageRecord
 
 
-def _make_pose(product_id, lat, lon):
+def _make_pose(product_id, lat, lon, pitch_deg=0.0):
     return RoverPose(product_id=product_id, sol=46, site=4, drive=2100,
-                     latitude=lat, longitude=lon, mast_azimuth_deg=10.0,
-                     compass_heading_deg=55.0)
+                     latitude=lat, longitude=lon,
+                     compass_heading_deg=55.0, pitch_deg=pitch_deg)
 
 
 def _make_record(product_id, min_lat, max_lat, min_lon, max_lon,
@@ -153,6 +153,107 @@ def test_process_dtm_group_saved_ids_reflect_actual_successes_not_position(
     assert not (out_dir / "P1_condition.png").exists()
     assert (out_dir / "P2_condition.png").exists()
     assert (out_dir / "P2_target.jpg").exists()
+
+
+def test_process_dtm_group_skips_steep_pitch_before_rendering(tmp_path, monkeypatch):
+    """2026-08-09 finding: even with correct pitch modeling, a real steep
+    down-look pose (close range) renders as a low-detail DTM-resolution-
+    limited 'shelf' pattern that doesn't match the fine real-photo detail —
+    a resolution mismatch, not something the entropy filter alone catches
+    (both real examples passed entropy). Skip poses beyond MAX_ABS_PITCH_DEG
+    before spending a render/network call on a pose we know can't work."""
+    dtm_record = _make_record("DTM_A", -5.0, -4.0, 137.0, 138.0)
+    poses = [
+        _make_pose("LEVEL", lat=-4.5, lon=137.5, pitch_deg=-10.0),   # kept
+        _make_pose("STEEP", lat=-4.5, lon=137.5, pitch_deg=-40.0),  # skipped
+    ]
+
+    fake_fetch_result = {
+        "product_id": "DTM_A", "status": "ok",
+        "dtm_path": str(tmp_path / "DTM_A.IMG"),
+        "ortho_paths": {"obs": str(tmp_path / "obs_ORTHO.JP2")},
+    }
+    _write_fake_dtm_raster(tmp_path / "DTM_A.IMG")
+    (tmp_path / "obs_ORTHO.JP2").write_bytes(b"fake")
+
+    rendered_ids = []
+
+    def fake_render_ground_view(*args, **kwargs):
+        # Real texture (not a uniform array), so this clears the entropy
+        # filter and isolates the pitch-skip decision being tested here.
+        return np.random.default_rng(0).integers(0, 255, size=(256, 256), dtype=np.uint8)
+
+    def fake_fetch_target_photo(product_id, sol, dest_path):
+        rendered_ids.append(product_id)
+        dest_path.write_bytes(b"\xff\xd8\xff fake jpg")
+        return True
+
+    monkeypatch.setattr("assemble_paired_corpus.fetch_dtm_and_orthos",
+                        lambda record, scratch, dest: fake_fetch_result)
+    monkeypatch.setattr("assemble_paired_corpus.load_dtm_arrays",
+                        lambda dtm_path, ortho_path: _make_varied_arrays())
+    monkeypatch.setattr("assemble_paired_corpus.latlon_to_dtm_pixel",
+                        lambda dtm_path, lat, lon: (25.0, 25.0))
+    monkeypatch.setattr("assemble_paired_corpus.compass_heading_to_render_heading",
+                        lambda compass_deg, transform: 0.0)
+    monkeypatch.setattr("assemble_paired_corpus.render_ground_view",
+                        fake_render_ground_view)
+    monkeypatch.setattr("assemble_paired_corpus.fetch_target_photo",
+                        fake_fetch_target_photo)
+
+    out_dir = tmp_path / "out"
+    scratch_dir = tmp_path / "scratch"
+    result = process_dtm_group(dtm_record, poses, scratch_dir, out_dir)
+
+    assert result["saved_ids"] == ["LEVEL"]
+    assert rendered_ids == ["LEVEL"]  # STEEP never even reached the render/fetch step
+
+
+def test_process_dtm_group_passes_pose_pitch_to_render(tmp_path, monkeypatch):
+    """Regression test for the 2026-08-09 content-mismatch fix: most real
+    Navcam poses have a steep non-zero pitch (down-look workspace shots),
+    and the renderer only produces a geometrically correct condition map
+    if that real pitch reaches render_ground_view — silently dropping it
+    (e.g. a stale positional-arg refactor) would reintroduce the bug even
+    though every other test here uses pitch_deg=0.0 and wouldn't catch it."""
+    dtm_record = _make_record("DTM_A", -5.0, -4.0, 137.0, 138.0)
+    # Within MAX_ABS_PITCH_DEG so this pose reaches the render step at all --
+    # the steep-pitch-skip behavior itself is covered by
+    # test_process_dtm_group_skips_steep_pitch_before_rendering above.
+    poses = [_make_pose("P1", lat=-4.5, lon=137.5, pitch_deg=-15.0)]
+
+    fake_fetch_result = {
+        "product_id": "DTM_A", "status": "ok",
+        "dtm_path": str(tmp_path / "DTM_A.IMG"),
+        "ortho_paths": {"obs": str(tmp_path / "obs_ORTHO.JP2")},
+    }
+    _write_fake_dtm_raster(tmp_path / "DTM_A.IMG")
+    (tmp_path / "obs_ORTHO.JP2").write_bytes(b"fake")
+
+    received_pitch = []
+
+    def fake_render_ground_view(*args, **kwargs):
+        received_pitch.append(kwargs.get("pitch_deg"))
+        return np.full((256, 256), 100, dtype=np.uint8)
+
+    monkeypatch.setattr("assemble_paired_corpus.fetch_dtm_and_orthos",
+                        lambda record, scratch, dest: fake_fetch_result)
+    monkeypatch.setattr("assemble_paired_corpus.load_dtm_arrays",
+                        lambda dtm_path, ortho_path: _make_varied_arrays())
+    monkeypatch.setattr("assemble_paired_corpus.latlon_to_dtm_pixel",
+                        lambda dtm_path, lat, lon: (25.0, 25.0))
+    monkeypatch.setattr("assemble_paired_corpus.compass_heading_to_render_heading",
+                        lambda compass_deg, transform: 0.0)
+    monkeypatch.setattr("assemble_paired_corpus.render_ground_view",
+                        fake_render_ground_view)
+    monkeypatch.setattr("assemble_paired_corpus.fetch_target_photo",
+                        lambda product_id, sol, dest_path: dest_path.write_bytes(b"\xff\xd8\xff fake jpg") or True)
+
+    out_dir = tmp_path / "out"
+    scratch_dir = tmp_path / "scratch"
+    process_dtm_group(dtm_record, poses, scratch_dir, out_dir)
+
+    assert received_pitch == [-15.0]
 
 
 def test_process_dtm_group_skips_low_entropy_renders(tmp_path, monkeypatch):

@@ -11,6 +11,9 @@ from pathlib import Path
 import requests
 
 sys.path.insert(0, str(Path(__file__).parent))
+# download_hirise.py and dtm_coverage.py are shared infrastructure that
+# stay in CycleGAN/Code.
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "CycleGAN" / "Code"))
 from download_hirise import REGIONS
 from dtm_coverage import query_dtm_coverage, signed_lon_to_0_360
 from parse_rover_pose import fetch_and_parse_pose

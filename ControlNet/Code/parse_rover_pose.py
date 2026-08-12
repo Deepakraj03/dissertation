@@ -1,8 +1,8 @@
 """Fetch and parse one Navcam EDR product's PDS3 label to recover the
-rover's (site, drive) and mast pointing at capture time, then combine with
-rover_localization.py's lookup to get a final absolute pose."""
+rover's (site, drive) and real camera boresight pointing at capture time,
+then combine with rover_localization.py's lookup to get a final absolute
+pose."""
 
-import math
 import re
 import sys
 from dataclasses import dataclass
@@ -18,13 +18,12 @@ NAVCAM_LABEL_BASE = "https://planetarydata.jpl.nasa.gov/img/data/msl/msl_navcam_
 ROVER_MOTION_COUNTER_RE = re.compile(
     r"ROVER_MOTION_COUNTER\s*=\s*\(([^)]+)\)"
 )
-RSM_GROUP_RE = re.compile(
-    r"GROUP\s*=\s*RSM_ARTICULATION_STATE_PARMS(.*?)END_GROUP\s*=\s*RSM_ARTICULATION_STATE_PARMS",
+SITE_DERIVED_GEOMETRY_RE = re.compile(
+    r"GROUP\s*=\s*SITE_DERIVED_GEOMETRY_PARMS(.*?)END_GROUP\s*=\s*SITE_DERIVED_GEOMETRY_PARMS",
     re.DOTALL,
 )
-ARTICULATION_ANGLE_RE = re.compile(
-    r"ARTICULATION_DEVICE_ANGLE\s*=\s*\(([^)]+)\)", re.DOTALL
-)
+INSTRUMENT_AZIMUTH_RE = re.compile(r"INSTRUMENT_AZIMUTH\s*=\s*([\-\d.]+)")
+INSTRUMENT_ELEVATION_RE = re.compile(r"INSTRUMENT_ELEVATION\s*=\s*([\-\d.]+)")
 
 
 @dataclass
@@ -35,8 +34,8 @@ class RoverPose:
     drive: int
     latitude: float
     longitude: float
-    mast_azimuth_deg: float
     compass_heading_deg: float
+    pitch_deg: float
 
 
 def label_url_for(product_id: str, sol: int) -> str:
@@ -44,31 +43,38 @@ def label_url_for(product_id: str, sol: int) -> str:
 
 
 def parse_navcam_label(label_text: str) -> dict:
-    """Extract site, drive, and RSM mast azimuth-measured (degrees) from a
-    Navcam PDS3 label's text. Raises ValueError if either required field is
-    missing or malformed, so callers can distinguish a real parse failure
-    from a network error."""
+    """Extract site, drive, and the real (JPL-derived, absolute site-frame)
+    camera boresight azimuth/elevation from a Navcam PDS3 label's text.
+    Uses SITE_DERIVED_GEOMETRY_PARMS's INSTRUMENT_AZIMUTH/INSTRUMENT_ELEVATION
+    rather than composing RSM joint angles with rover body yaw ourselves —
+    JPL's own geometry pipeline already resolves the full kinematic chain
+    (RSM + rover + coordinate frames) into this single absolute value, and
+    it's the only source that carries real elevation at all (found
+    2026-08-09: most real Navcam full-frame shots are steep down-look
+    arm-workspace shots, not horizon shots — elevation is essential, not
+    optional). Raises ValueError if any required field is missing or
+    malformed, so callers can distinguish a real parse failure from a
+    network error."""
     counter_match = ROVER_MOTION_COUNTER_RE.search(label_text)
     if not counter_match:
         raise ValueError("ROVER_MOTION_COUNTER not found in label")
     fields = [f.strip() for f in counter_match.group(1).split(",")]
     site, drive = int(fields[0]), int(fields[1])
 
-    rsm_group_match = RSM_GROUP_RE.search(label_text)
-    if not rsm_group_match:
-        raise ValueError("RSM_ARTICULATION_STATE_PARMS group not found in label")
-    angle_match = ARTICULATION_ANGLE_RE.search(rsm_group_match.group(1))
-    if not angle_match:
-        raise ValueError("ARTICULATION_DEVICE_ANGLE not found in RSM group")
-    # First value is AZIMUTH-MEASURED per ARTICULATION_DEVICE_ANGLE_NAME's
-    # documented ordering; strip the "<rad>" unit suffix before parsing.
-    first_value = angle_match.group(1).split(",")[0]
-    azimuth_rad = float(first_value.replace("<rad>", "").strip())
+    geom_match = SITE_DERIVED_GEOMETRY_RE.search(label_text)
+    if not geom_match:
+        raise ValueError("SITE_DERIVED_GEOMETRY_PARMS group not found in label")
+    az_match = INSTRUMENT_AZIMUTH_RE.search(geom_match.group(1))
+    el_match = INSTRUMENT_ELEVATION_RE.search(geom_match.group(1))
+    if not az_match or not el_match:
+        raise ValueError(
+            "INSTRUMENT_AZIMUTH/ELEVATION not found in SITE_DERIVED_GEOMETRY_PARMS group")
 
     return {
         "site": site,
         "drive": drive,
-        "mast_azimuth_deg": math.degrees(azimuth_rad),
+        "azimuth_deg": float(az_match.group(1)),
+        "elevation_deg": float(el_match.group(1)),
     }
 
 
@@ -91,8 +97,6 @@ def fetch_and_parse_pose(product_id: str, sol: int,
     if site_drive is None:
         return None
 
-    compass_heading = (site_drive.yaw_deg + parsed["mast_azimuth_deg"]) % 360.0
-
     return RoverPose(
         product_id=product_id,
         sol=sol,
@@ -100,6 +104,6 @@ def fetch_and_parse_pose(product_id: str, sol: int,
         drive=parsed["drive"],
         latitude=site_drive.latitude,
         longitude=site_drive.longitude,
-        mast_azimuth_deg=parsed["mast_azimuth_deg"],
-        compass_heading_deg=compass_heading,
+        compass_heading_deg=parsed["azimuth_deg"] % 360.0,
+        pitch_deg=parsed["elevation_deg"],
     )
