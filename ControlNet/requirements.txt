@@ -1,0 +1,14 @@
+diffusers>=0.39
+transformers>=5.0
+accelerate>=1.0
+safetensors>=0.8
+datasets>=5.0
+ftfy>=6.0
+tensorboard>=2.18
+scikit-image>=0.25
+
+# Also requires CycleGAN/requirements.txt (pillow, numpy, pyproj) and
+# CycleGAN/Code/'s own cleanfid/torch/rasterio/pyproj install, since
+# ControlNet/Code/ imports shared HiRISE/DTM infrastructure from
+# CycleGAN/Code/ rather than duplicating it -- install both in the same
+# environment.

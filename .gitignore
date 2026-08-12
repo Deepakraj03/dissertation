@@ -28,12 +28,35 @@ CycleGAN/Data/eval/*
 !CycleGAN/Data/HiRISE_index/
 CycleGAN/Data/HiRISE_index/*
 !CycleGAN/Data/HiRISE_index/dtm_coverage_*.json
-!CycleGAN/Data/HiRISE_index/controlnet_phase1_feasibility_report.json
 DiffusionSR/Data/
 
 # Training artifacts (move machine-to-machine via rsync, not git)
 CycleGAN/checkpoints/
 CycleGAN/logs/
+
+# ControlNet (Phase 1 corpus pipeline + Phase 2 fine-tuning) -- same
+# convention as CycleGAN/Data above. Corpus regenerate via:
+#   ControlNet/Code/assemble_paired_corpus.py
+# Exceptions: manifest.csv, eval result JSONs, and the feasibility report
+# are tiny provenance records (KBs, not bulk data) and ARE tracked.
+ControlNet/Data/*
+!ControlNet/Data/processed/
+ControlNet/Data/processed/*
+!ControlNet/Data/processed/paired_controlnet_corpus/
+ControlNet/Data/processed/paired_controlnet_corpus/*
+!ControlNet/Data/processed/paired_controlnet_corpus/manifest.csv
+!ControlNet/Data/eval/
+ControlNet/Data/eval/*
+!ControlNet/Data/eval/mars_model_eval.json
+!ControlNet/Data/eval/fid_results_controlnet.json
+!ControlNet/Data/HiRISE_index/
+ControlNet/Data/HiRISE_index/*
+!ControlNet/Data/HiRISE_index/controlnet_phase1_feasibility_report.json
+
+# Training artifacts (move machine-to-machine via rsync, not git) --
+# the ControlNet checkpoint is ~1.4GB, well past what git should hold.
+ControlNet/checkpoints/
+ControlNet/logs/
 
 # LaTeX build byproducts (regenerate from .tex/.bib via latexmk/bibtex)
 Literature review/*.aux
