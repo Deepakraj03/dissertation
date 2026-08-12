@@ -38,11 +38,20 @@ def render_ground_view(heightmap: np.ndarray, albedo: np.ndarray,
                        output_size: int = 256, fov_deg: float = 45.0,
                        camera_height_m: float = 1.2,
                        max_range_m: float = 30.0,
-                       sky_value: int = 0) -> np.ndarray:
+                       sky_value: int = 0,
+                       pitch_deg: float = 0.0) -> np.ndarray:
     """Render a ground-level view of heightmap/albedo from a camera at
     (camera_row, camera_col) in heightmap pixel coordinates, facing
     heading_deg (0 = +row direction, 90 = +col direction, degrees
-    clockwise). Returns a (output_size, output_size) uint8 grayscale image.
+    clockwise). pitch_deg is the camera boresight's elevation relative to
+    horizontal (positive = up, negative = down, matching real Navcam
+    labels' SITE_DERIVED_GEOMETRY_PARMS.INSTRUMENT_ELEVATION convention);
+    0.0 (the default) is a level camera, i.e. the original behavior.
+    Horizontal ray-marching (which world point is visible along a given
+    azimuth+distance) stays a level sweep regardless of pitch_deg — only
+    the vertical screen-row mapping shifts — matching this renderer's
+    existing 2.5D height-field simplification rather than a full 3D ray
+    rotation. Returns a (output_size, output_size) uint8 grayscale image.
     """
     ground_h = bilinear_sample(heightmap, camera_row, camera_col)
     if math.isnan(ground_h):
@@ -51,6 +60,7 @@ def render_ground_view(heightmap: np.ndarray, albedo: np.ndarray,
 
     img = np.full((output_size, output_size), sky_value, dtype=np.uint8)
     vfov_rad = math.radians(fov_deg)  # square FOV: horizontal == vertical
+    pitch_rad = math.radians(pitch_deg)
     center_row = output_size / 2.0
 
     step_m = max(pixel_scale_m * 0.5, 0.1)
@@ -72,7 +82,7 @@ def render_ground_view(heightmap: np.ndarray, albedo: np.ndarray,
             if math.isnan(terrain_h):
                 break  # ray left the heightmap; remainder stays sky_value
 
-            elevation_angle = math.atan2(terrain_h - eye_h, dist_m)
+            elevation_angle = math.atan2(terrain_h - eye_h, dist_m) - pitch_rad
             screen_row = center_row - (elevation_angle / (vfov_rad / 2.0)) * center_row
             screen_row = int(round(screen_row))
             screen_row = max(0, min(output_size - 1, screen_row))

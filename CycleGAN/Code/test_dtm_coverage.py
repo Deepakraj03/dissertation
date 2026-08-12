@@ -18,6 +18,7 @@ SAMPLE_RESPONSE_MULTI = {
                     "Maximum_latitude": "23.9711",
                     "Westernmost_longitude": "341.035",
                     "Easternmost_longitude": "341.178",
+                    "Footprint_geometry": "POLYGON ((341.05 23.70, 341.15 23.69, 341.16 23.96, 341.06 23.97, 341.05 23.70))",
                     "Comment": "Possible MSL landing site in Mawrth Vallis",
                     "ODE_notes": {
                         "ODE_note": [
@@ -90,10 +91,22 @@ def test_parse_ode_response_multiple_products():
     assert first.min_lon == pytest.approx(341.035)
     assert first.max_lon == pytest.approx(341.178)
     assert "Mawrth Vallis" in first.comment
+    assert first.footprint_wkt == (
+        "POLYGON ((341.05 23.70, 341.15 23.69, 341.16 23.96, "
+        "341.06 23.97, 341.05 23.70))"
+    )
     assert first.files_url == (
         "https://ode.rsl.wustl.edu/mars/productfiles.aspx"
         "?product_id=DTEEC_015985_2040_016262_2040_U01&product_idGeo=26731198"
     )
+
+
+def test_parse_ode_response_missing_footprint_geometry_defaults_to_empty():
+    # Second product in SAMPLE_RESPONSE_MULTI has no Footprint_geometry key
+    # -- must not raise, and must default to "" (find_covering_dtm's bbox
+    # fallback path relies on this being falsy).
+    records = parse_ode_response(SAMPLE_RESPONSE_MULTI)
+    assert records[1].footprint_wkt == ""
 
 
 def test_parse_ode_response_single_product_not_wrapped_in_list():

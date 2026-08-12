@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 
@@ -116,3 +118,79 @@ def test_render_ground_view_exits_bounds_shows_sky():
                              camera_row=5, camera_col=25, heading_deg=180,
                              output_size=32, sky_value=77, max_range_m=30.0)
     assert (img == 77).any()
+
+
+def test_render_ground_view_default_pitch_matches_prior_level_behavior():
+    # pitch_deg defaults to 0.0 (level camera) so every pre-existing caller
+    # (which never passed pitch_deg) keeps rendering exactly as before.
+    heightmap = np.zeros((400, 400), dtype=np.float32)
+    albedo = np.full((400, 400), 100, dtype=np.uint8)
+    img_default = render_ground_view(heightmap, albedo, pixel_scale_m=1.0,
+                                     camera_row=200, camera_col=200,
+                                     heading_deg=0, output_size=64, sky_value=0)
+    img_explicit_level = render_ground_view(heightmap, albedo, pixel_scale_m=1.0,
+                                            camera_row=200, camera_col=200,
+                                            heading_deg=0, output_size=64,
+                                            sky_value=0, pitch_deg=0.0)
+    assert np.array_equal(img_default, img_explicit_level)
+
+
+def test_render_ground_view_pitch_down_increases_visible_ground():
+    # Real Navcam data is mostly steep down-look (arm-workspace) shots, not
+    # horizon shots -- see 2026-08-09 finding. A camera pitched down should
+    # reveal more ground (fewer sky pixels) than a level camera on the same
+    # flat terrain, since the boresight itself is now aimed at the ground.
+    heightmap = np.zeros((400, 400), dtype=np.float32)
+    albedo = np.full((400, 400), 100, dtype=np.uint8)
+    img_level = render_ground_view(heightmap, albedo, pixel_scale_m=1.0,
+                                   camera_row=200, camera_col=200,
+                                   heading_deg=0, output_size=64, sky_value=0,
+                                   pitch_deg=0.0)
+    img_pitched_down = render_ground_view(heightmap, albedo, pixel_scale_m=1.0,
+                                          camera_row=200, camera_col=200,
+                                          heading_deg=0, output_size=64,
+                                          sky_value=0, pitch_deg=-30.0)
+    assert (img_pitched_down != 0).sum() > (img_level != 0).sum()
+
+
+def test_render_ground_view_pitch_shifts_screen_row_by_expected_amount():
+    # A feature placed exactly at eye height (elevation_angle == 0 relative
+    # to a level boresight) must land at the exact screen row the pitch
+    # formula predicts, not just "somewhere different" -- precise check
+    # that pitch is a boresight offset (elevation_angle - pitch_rad), not
+    # applied with the wrong sign or magnitude.
+    size = 400
+    heightmap = np.zeros((size, size), dtype=np.float32)
+    albedo = np.zeros((size, size), dtype=np.uint8)
+    camera_row, camera_col = 200, 200
+    camera_height_m = 1.2
+    dist_m = 10.0  # lands exactly on a 0.5m ray-march step
+    feature_row = camera_row + int(dist_m)
+    heightmap[feature_row, camera_col] = camera_height_m  # == eye height
+    albedo[feature_row, camera_col] = 255
+
+    fov_deg = 45.0
+    output_size = 64
+    center_row = output_size / 2.0
+    center_col = output_size // 2
+
+    img_level = render_ground_view(heightmap, albedo, pixel_scale_m=1.0,
+                                   camera_row=camera_row, camera_col=camera_col,
+                                   heading_deg=0, output_size=output_size,
+                                   fov_deg=fov_deg, camera_height_m=camera_height_m,
+                                   sky_value=0, pitch_deg=0.0)
+    # elevation_angle == 0 pre-pitch -> screen_row == center_row exactly.
+    assert np.where(img_level[:, center_col] == 255)[0][0] == pytest.approx(
+        center_row, abs=1)
+
+    pitch_deg = -11.25  # half of half-FOV (22.5 deg)
+    img_pitched = render_ground_view(heightmap, albedo, pixel_scale_m=1.0,
+                                     camera_row=camera_row, camera_col=camera_col,
+                                     heading_deg=0, output_size=output_size,
+                                     fov_deg=fov_deg, camera_height_m=camera_height_m,
+                                     sky_value=0, pitch_deg=pitch_deg)
+    # elevation_angle_adjusted = 0 - radians(-11.25) = +11.25 deg, which is
+    # half the half-FOV -> screen_row = center_row - 0.5*center_row.
+    expected_row = center_row - 0.5 * center_row
+    assert np.where(img_pitched[:, center_col] == 255)[0][0] == pytest.approx(
+        expected_row, abs=1)
