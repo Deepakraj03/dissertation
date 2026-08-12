@@ -1,0 +1,61 @@
+{
+  "n_samples": 9,
+  "normalize_method": "mean_std",
+  "eval_size": 512,
+  "mean_ssim": 0.1858689742052378,
+  "mean_psnr": 11.37725095927229,
+  "kid": 0.1924145221710205,
+  "per_sample": [
+    {
+      "id": "NLB_519213748EDR_F0542784NCAM00288M1",
+      "ssim": 0.09379578879147575,
+      "psnr": 11.391048405843446
+    },
+    {
+      "id": "NLB_550279493EDR_F0633056NCAM00385M1",
+      "ssim": 0.10475336921136265,
+      "psnr": 10.831904187436571
+    },
+    {
+      "id": "NLB_552050372EDR_F0641626NCAM00299M1",
+      "ssim": 0.32730943632778176,
+      "psnr": 13.57366783115208
+    },
+    {
+      "id": "NLB_563594097EDR_F0662366NCAM00385M1",
+      "ssim": 0.13473066904923883,
+      "psnr": 11.758702879253622
+    },
+    {
+      "id": "NLB_563594965EDR_F0662414NCAM00296M1",
+      "ssim": 0.0783267625711932,
+      "psnr": 10.826096082206032
+    },
+    {
+      "id": "NLB_566255660EDR_F0671238NCAM00262M1",
+      "ssim": 0.10193578703114488,
+      "psnr": 10.834335681698315
+    },
+    {
+      "id": "NLB_579570227EDR_F0701554NCAM00262M1",
+      "ssim": 0.24086627328315777,
+      "psnr": 11.06519193094639
+    },
+    {
+      "id": "NLB_589338714EDR_F0722272NCAM00260M1",
+      "ssim": 0.09960031260182638,
+      "psnr": 11.013275683529578
+    },
+    {
+      "id": "NRB_583116886EDR_F0710228NCAM00600M1",
+      "ssim": 0.4915023689799589,
+      "psnr": 11.10103595138456
+    }
+  ],
+  "timestamp": "2026-08-10T15:26:59.442629+00:00",
+  "interpretation_notes": [
+    "SSIM/PSNR measure exact pixel-level reconstruction of each specific real photo -- a stricter, different question from whether the output is a plausible scene given the geometry. The model hallucinates unseen content (specific rocks, sand ripples) it was never shown, so modest SSIM/PSNR here does not by itself mean poor quality.",
+    "KID (unbiased polynomial-kernel MMD^2) is well-defined at small n, unlike FID's Gaussian-covariance estimate -- preferred over FID for this test set size.",
+    "Generated images were normalized ('mean_std') using GLOBAL whole-set statistics before any metric was computed, never per-pair, so paired metrics (SSIM/PSNR) cannot be inflated by peeking at each image's own real target."
+  ]
+}
