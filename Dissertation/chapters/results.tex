@@ -1,0 +1,99 @@
+\chapter{CycleGAN Baseline: Training, Evaluation and Diagnosis}
+\label{ch:results}
+
+This chapter reports the results of training the CycleGAN baseline described in Chapter~4 on the corrected, full-resolution HiRISE corpus, evaluates it quantitatively and visually, and presents a specific, evidence-based diagnosis of why it currently falls well short of the target FID --- rather than a general appeal to GAN training instability.
+
+\section{Training Run}
+
+A 50-epoch run (batch size 4, learning rate $2{\times}10^{-4}$ constant for the first 25 epochs then linearly decayed to zero, $\lambda_{\mathrm{cyc}}=10$, $\lambda_{\mathrm{idt}}=5$) was carried out on the A4000, taking approximately 37 minutes per epoch and $\sim$31 hours in total. Figure~\ref{fig:losscurves} shows the full loss history. The generator and cycle-consistency losses converge smoothly throughout --- on their own, they would read as a healthy training run. The discriminator losses tell a different story: $D_H$ (the discriminator judging HiRISE realism) settles into a stable equilibrium around 0.03 from epoch~10 onward, while $D_R$ (the discriminator judging rover-image realism) starts \emph{higher} than $D_H$ at epoch~1 (0.162 vs.\ 0.095), crosses below it by epoch~3, and then decays smoothly and monotonically for the rest of training, reaching $3.99{\times}10^{-6}$ by epoch~50 (Table~\ref{tab:disc-timeline}). This divergence is visible well before the learning-rate decay begins at epoch~26, so it is not an artefact of the training schedule.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\textwidth]{loss_curves_epoch050}
+  \caption{Generator/cycle-consistency loss (top, linear scale) and discriminator loss (bottom, log scale) over 50 epochs of training on the corrected full-resolution HiRISE corpus. $D_R$ collapses from epoch~3 onward while $D_H$ remains stable --- the diagnostic signal discussed in Section~\ref{sec:diagnosis}.}
+  \label{fig:losscurves}
+\end{figure}
+
+\begin{table}[H]
+  \caption{Discriminator loss at representative epochs, illustrating the $D_H$/$D_R$ divergence.}
+  \label{tab:disc-timeline}
+  \centering
+  \begin{tabular}{lrr}
+    \toprule
+    Epoch & $D_H$ & $D_R$ \\
+    \midrule
+    1  & 0.0954 & 0.1617 \\
+    3  & 0.0758 & 0.0467 \\
+    10 & 0.0272 & 0.0046 \\
+    25 & 0.0318 & 0.0016 \\
+    50 & 0.0325 & 0.0000040 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Quantitative Evaluation}
+
+Table~\ref{tab:fid-results} reports FID computed between generated and real rover-domain images (Chapter~4's evaluation pipeline), for both this run and the earlier run on the uncorrected browse-resolution corpus (Section~4.3). Fixing the corpus resolution made FID \emph{worse}, not better --- a counter-intuitive result that Section~\ref{sec:diagnosis} explains.
+
+\begin{table}[H]
+  \caption{FID results against the methodology's target ($\leq$55, Chapter~3).}
+  \label{tab:fid-results}
+  \centering
+  \begin{tabular}{lrrr}
+    \toprule
+    Run & Checkpoint & Corpus & FID \\
+    \midrule
+    Prior run  & epoch\_025 & Browse-resolution ($\sim$3\,m/px, buggy) & 171.8 \\
+    This run   & epoch\_050 & Real RDR (25\,cm/px, corrected) & 269.9 \\
+    \midrule
+    Target (Chapter~3) & --- & --- & $\leq$55 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Visual Inspection of Sample Translations}
+\label{sec:visual}
+
+Sample translation grids saved during training (each showing real HiRISE~$\to$~translated-to-rover~$\to$~reconstructed-HiRISE on top, and real rover~$\to$~translated-to-HiRISE~$\to$~reconstructed-rover below) confirm the same pattern at every epoch inspected, from epoch~1 through the final epoch~50 checkpoint (Figures~\ref{fig:sample001}--\ref{fig:sample050}). The HiRISE-to-rover translation stays a grainy, high-frequency echo of the input with no rover-ground structure; the rover-to-HiRISE translation stays a washed-out, low-contrast ghost of the input rather than adopting HiRISE's characteristic appearance. Both reconstructions (cycle-consistency columns) match their originals closely at every epoch --- but, as Section~\ref{sec:diagnosis} argues, that is a symptom of the underlying problem rather than evidence against it.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{sample_epoch001}
+  \caption{Sample translation grid, epoch 1. Real HiRISE input (top-left) already shows the characteristic speckle of genuine 25\,cm/pixel radiometric data.}
+  \label{fig:sample001}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{sample_epoch030}
+  \caption{Sample translation grid, epoch 30. HiRISE-to-rover output (top-middle) is high-frequency static with no rover-ground structure; $D_R$ is already near collapse at this point (loss $\approx0.0011$).}
+  \label{fig:sample030}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{sample_epoch050}
+  \caption{Sample translation grid, final epoch 50 checkpoint. The same pattern persists: HiRISE-to-rover stays noise-like, rover-to-HiRISE stays a washed-out echo of the input.}
+  \label{fig:sample050}
+\end{figure}
+
+\section{Diagnosis}
+\label{sec:diagnosis}
+
+The evidence in Sections~4.1--4.3 converges on a specific, mechanistic explanation rather than a generic ``GANs are unstable'' account.
+
+$D_R$ judges whether a given image is a genuine rover photograph; it is the discriminator that tells $G_{H2R}$ (the HiRISE-to-rover generator) whether its output is convincing. The corrected HiRISE corpus (Chapter~4) is genuinely grainy --- visible sensor speckle from real 16-bit radiometric data, stretched to 8-bit --- while real rover NAVCAM photographs are comparatively smooth, well-exposed camera images. That is a low-level \emph{noise-statistics} gap layered on top of the intended \emph{style} gap the network is meant to learn to bridge, and it is a far easier signal for a convolutional discriminator to key on than genuine cross-domain semantics (crater texture versus rock/dust texture): $D_R$ can reject $G_{H2R}$'s output purely because it still carries HiRISE-style grain, without ever needing to learn what a real rover photograph actually looks like. Once $D_R$ locks onto that shortcut --- by epoch~3, per Table~\ref{tab:disc-timeline} --- it wins for the rest of training essentially for free, so $G_{H2R}$ receives a real but semantically uninformative gradient, consistent with its output staying a grainy echo of the input at every epoch inspected (Section~\ref{sec:visual}). The reverse direction, $G_{R2H}$ turning a smooth rover image grainy, is the easier direction for a generator to fake at least superficially, which is consistent with $D_H$ remaining in a healthier, contested equilibrium throughout.
+
+This account also explains why correcting the corpus resolution made FID worse rather than better (Table~\ref{tab:fid-results}): the earlier, browse-resolution corpus was JPEG-compressed and resampled, and therefore smoother and closer to rover-image smoothness, so it did not hand $D_R$ this shortcut as blatantly. Fixing the data-quality bug was still the correct thing to do --- training and evaluating against genuinely wrong-resolution imagery would have made every subsequent result meaningless --- but it surfaced a training-dynamics problem that the smoother, wrong corpus had been partially masking.
+
+\section{Candidate Fixes}
+
+Three candidate fixes follow directly from the diagnosis, in rough order of expected leverage versus implementation effort:
+
+\begin{enumerate}
+  \item \textbf{Close the noise-statistics gap directly}, either by applying mild denoising to real HiRISE patches or by adding matched synthetic sensor grain to the rover domain, so that $D_R$ can no longer separate real from generated rover images on texture statistics alone and is forced to engage with genuine content.
+  \item \textbf{Weaken $D_R$ specifically} relative to the generators --- a lower learning rate or a reduced update frequency for $D_R$ alone --- which treats the symptom directly and is the cheapest to try.
+  \item \textbf{Reduce $\lambda_{\mathrm{cyc}}$ below 10}, so that cycle-consistency stops rewarding a near-identity mapping and $G_{H2R}$ is less anchored to reproducing input structure.
+\end{enumerate}
+
+Resolving this diagnosis is the immediate next priority, ahead of building the physics-constrained UNSB architecture Chapter~3 specifies, since a well-understood, correctly-balanced CycleGAN baseline is a more useful point of comparison for that later work than one left in its current, diagnosed-but-unresolved state.

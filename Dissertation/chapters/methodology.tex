@@ -1,0 +1,138 @@
+\chapter{Methodology}
+\label{ch:methodology}
+
+This chapter formalises the three-stage physics-constrained generative pipeline motivated in Chapter~2: a mathematical problem formulation, the proposed system architecture, dataset design, training strategy, and evaluation framework, condensed from a standalone methodology document produced earlier in the project.
+
+\section{Problem Formulation}
+\label{sec:formulation}
+
+Let $\mathbf{x} \in \mathbb{R}^{H \times W \times C}$ denote an image tensor. Define two domains: the nadir orbital domain $\mathcal{X} = \{\mathbf{x}_i^{\mathrm{nad}}\}_{i=1}^{N}$ comprising HiRISE patches at 25\,cm/pixel, and the rover-perspective domain $\mathcal{Y} = \{\mathbf{y}_j^{\mathrm{rov}}\}_{j=1}^{M}$ comprising NAVCAM images, with no correspondence between index sets $i$ and $j$ --- the training regime is fully unpaired, with respective marginal distributions $P_{\mathrm{nad}}$ and $P_{\mathrm{persp}}$.
+
+\textbf{Stage 1 (optional, super-resolution).} Given a low-resolution CaSSIS/CTX image at 4--6\,m/pixel, Stage~1 produces a HiRISE-equivalent estimate at 0.25\,m/pixel ($16$--$24\times$), following the conditional diffusion framework of DiffusionSat~\cite{khanna2024diffusionsat} and a taming-diffusion SR approach~\cite{zhu2025taming}:
+\begin{equation}
+  \mathrm{d}\mathbf{z}_t = \bigl[f(\mathbf{z}_t, t)
+    - g(t)^2 s_\theta(\mathbf{z}_t, t, \mathbf{x}^{\mathrm{lr}})\bigr]\,\mathrm{d}t
+    + g(t)\,\mathrm{d}\bar{\mathbf{W}}_t,
+  \label{eq:sr_sde}
+\end{equation}
+where $s_\theta$ is a denoising score function conditioned on the low-resolution input. This stage is bypassed when HiRISE imagery is already available directly, which is the case for the primary test site, Oxia Planum.
+
+\textbf{Stage 2 (core contribution, view translation).} The Neural Schr\"{o}dinger Bridge (UNSB)~\cite{kim2024unsb} solves the entropy-regularised optimal transport problem between $P_{\mathrm{nad}}$ and $P_{\mathrm{persp}}$:
+\begin{equation}
+  \pi^* = \arg\min_{\pi \in \Pi(P_{\mathrm{nad}}, P_{\mathrm{persp}})}
+    \mathbb{E}_{(\mathbf{x},\mathbf{y}) \sim \pi}
+    \bigl[c(\mathbf{x}, \mathbf{y})\bigr]
+    + \varepsilon \, \mathrm{KL}(\pi \,\|\, R),
+  \label{eq:sb_ot}
+\end{equation}
+realised by a forward--backward SDE pair jointly trained via the Iterative Proportional Fitting Procedure (IPFP), with a Brownian Bridge ODE variant~\cite{xiao2025brownian} available where deterministic outputs are required.
+
+Because unconstrained translation networks trained on Mars data are prone to photometric hallucination~\cite{aithal2024hallucination,rathkopf2025reliability}, four physics-informed loss terms are appended to the base bridge loss $\mathcal{L}_{\mathrm{SB}}$: a solar-geometry consistency term $\mathcal{L}_{\mathrm{solar}}$ penalising deviation between the generated image's shadow direction and the direction implied by the HiRISE acquisition's sun angle metadata; a Hapke photometric term $\mathcal{L}_{\mathrm{photo}}$ constraining the estimated single-scattering albedo to the Mars ferric-oxide prior via the Hapke BRDF~\cite{hapke2012theory}; a geological morphometry term $\mathcal{L}_{\mathrm{geo}}$ scoring generated patches against known crater size-frequency and aeolian bedform statistics; and a standard VGG-based perceptual term $\mathcal{L}_{\mathrm{perceptual}}$. The total objective is
+\begin{equation}
+  \mathcal{L}_{\mathrm{total}} =
+    \mathcal{L}_{\mathrm{SB}}
+    + \lambda_1 \mathcal{L}_{\mathrm{solar}}
+    + \lambda_2 \mathcal{L}_{\mathrm{photo}}
+    + \lambda_3 \mathcal{L}_{\mathrm{geo}}
+    + \lambda_4 \mathcal{L}_{\mathrm{perceptual}},
+  \label{eq:l_total}
+\end{equation}
+with initial weights $\lambda_1=0.5$, $\lambda_2=1.0$, $\lambda_3=0.8$, $\lambda_4=0.1$, set from a preliminary scale analysis and refined by validation-set search.
+
+\textbf{Stage 3 (rendering).} Given $K$ synthetic perspective images with estimated camera poses, a 3D Gaussian Splatting scene~\cite{kerbl2023gaussian} is fit by minimising a photometric reconstruction loss combining $\ell_1$ and D-SSIM terms over the differentiably-rasterised views, producing a scene renderable in real time for VR display.
+
+\section{Proposed System Architecture}
+\label{sec:architecture}
+
+The three stages are designed to be modular: Stage~2 and Stage~3 can operate independently of Stage~1 whenever HiRISE coverage is already available, which is the case for the primary Oxia Planum test site. Stage~2's generator $G_\phi$ is a 256-channel U-Net with eight residual blocks and self-attention at $32{\times}32$ and $16{\times}16$ scales; solar azimuth/elevation metadata are injected at each residual block via adaptive layer normalisation, following the conditioning strategy of PFMGAN~\cite{zou2026pfmgan}. UNSB is chosen over CycleGAN and standard diffusion inpainting for three reasons: its entropy-regularised optimal-transport objective gives a principled probabilistic account of the domain gap; it supports fully unpaired training, essential since no geographically registered nadir--perspective Mars pairs exist; and its SDE formulation supports switching to a deterministic Brownian Bridge ODE when repeatable outputs are required for evaluation or multi-view consistency. Stage~3 uses the reference 3DGS implementation~\cite{kerbl2023gaussian} unmodified, seeded from MADNet-2.0 depth estimates~\cite{tao2021madnet} to reduce floater artefacts on the textureless regions common in Mars terrain.
+
+A CycleGAN baseline (unpaired, no physics constraints) is implemented first, ahead of the full UNSB, precisely because Chapter~2 established that no reviewed I2I method has been validated against a domain gap this large --- an empirically-grounded, well-understood baseline is a necessary first step, not a formality. Its implementation, training, and diagnosis are reported in Chapters~4--5.
+
+\section{Dataset Design and Acquisition Strategy}
+\label{sec:datasets}
+
+The primary geographic focus is Oxia Planum ($18.3^{\circ}$N, $335.5^{\circ}$E), the ExoMars 2028 candidate landing site, imaged by HiRISE on more than 30 occasions. HiRISE products are radiometrically corrected (RDR) and tiled at 25\,cm/pixel; tiles with cloud or data-gap fractions exceeding 5\% are discarded. Rover NAVCAM imagery is drawn from the Curiosity and Perseverance raw image archives, filtered to remove dust-storm-opacity acquisitions and frames showing rover hardware. Table~\ref{tab:dataset} summarises the target corpus. Both corpora are split 80/10/10 (train/val/test), stratified by geographic region to avoid spatial-autocorrelation leakage; augmentation (flips, $90^{\circ}$ rotations, brightness jitter) is applied only to training data, with solar-metadata angles transformed consistently with any spatial flip.
+
+\begin{table}[H]
+  \caption{Target dataset summary (methodology design target; the corpus actually built to date is reported in Chapter~4).}
+  \label{tab:dataset}
+  \centering
+  \begin{tabular}{lrrl}
+    \toprule
+    Corpus & Size & Resolution & Source \\
+    \midrule
+    HiRISE nadir patches  & 50{,}000 & 25\,cm/px & NASA PDS HiRISE RDR \\
+    Rover NAVCAM images   & 30{,}000 & $\leq$1280\,px & NASA raw archives \\
+    \midrule
+    Total                 & 80{,}000 & ---         & --- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Training Strategy and Optimisation}
+\label{sec:training}
+
+Stage~1 is designed to be initialised from a DiffusionSat checkpoint~\cite{khanna2024diffusionsat} and fine-tuned on Mars orbital data. Stage~2 is designed around the IPFP procedure of~\cite{kim2024unsb}: alternating forward/backward half-bridge updates for 10 outer iterations, with three auxiliary loss networks (a shadow-direction estimator, a Hapke inversion network, and a geological in/out-of-distribution classifier) pre-trained separately and kept frozen during UNSB training. Stage~3 trains the 3DGS scene for approximately 30,000 iterations with periodic densification and opacity pruning, following~\cite{kerbl2023gaussian}. Algorithm~\ref{alg:stage2} summarises the Stage~2 training loop as designed; its implementation has not yet begun.
+
+\begin{figure}[H]
+\centering
+\fbox{%
+  \parbox{0.85\textwidth}{%
+    \small
+    \textbf{Algorithm 1:} Stage~2 UNSB Training with Physics Losses\\[2pt]
+    \textbf{Input:} HiRISE corpus $\mathcal{X}$; rover corpus $\mathcal{Y}$;
+    pretrained auxiliary nets $D_\psi$, $\Omega_\xi$, $K_\kappa$;
+    loss weights $\lambda_{1..4}$;
+    IPFP iterations $N_{\mathrm{ipfp}}=10$\\[2pt]
+    \textbf{Output:} Trained generator $G_\phi$\\[4pt]
+    \textbf{for} $n = 1$ \textbf{to} $N_{\mathrm{ipfp}}$ \textbf{do}\\
+    \hspace*{1em} \textit{// Forward half-bridge: update $G_\phi$}\\
+    \hspace*{1em} \textbf{for} $t = 1$ \textbf{to} $5000$ \textbf{do}\\
+    \hspace*{2em} Sample $\mathbf{x} \sim \mathcal{X}$,\ $\mathbf{y} \sim \mathcal{Y}$;\quad
+        $\hat{\mathbf{y}} \leftarrow G_\phi(\mathbf{x})$\\
+    \hspace*{2em} Compute $\mathcal{L}_{\mathrm{SB}}$,
+        $\mathcal{L}_{\mathrm{solar}}$, $\mathcal{L}_{\mathrm{photo}}$,
+        $\mathcal{L}_{\mathrm{geo}}$, $\mathcal{L}_{\mathrm{perceptual}}$\\
+    \hspace*{2em} $\mathcal{L} \leftarrow \mathcal{L}_{\mathrm{total}}$
+        (Eq.~\ref{eq:l_total}); update $G_\phi$ via AdamW\\
+    \hspace*{1em} \textbf{end for}\\
+    \hspace*{1em} \textit{// Backward half-bridge update (IPFP step)}\\
+    \textbf{end for}\\[4pt]
+    \textbf{return} $G_\phi$
+  }%
+}
+\caption{Pseudocode for the designed Stage~2 UNSB training loop (not yet implemented).}
+\label{alg:stage2}
+\end{figure}
+
+\section{Evaluation Framework}
+\label{sec:evaluation}
+
+Perceptual quality is measured via Fr\'{e}chet Inception Distance (FID) and LPIPS against held-out real rover imagery. Where high-quality DTMs are available, structural fidelity (SSIM, LPIPS) is measured against synthetic ground-truth perspective renders. Physical plausibility is measured via shadow-angle error (mean absolute angular deviation between predicted and true solar-derived shadow direction) and Hapke BRDF residual (deviation of estimated albedo from the Mars prior). Hallucination rate is defined as the fraction of generated patches the geological classifier flags as out-of-distribution. VR rendering quality is measured by render throughput (fps) and novel-view PSNR/SSIM.
+
+Table~\ref{tab:baselines} sets out the four baselines the proposed method is compared against, with the CycleGAN row implemented and evaluated in Chapters~4--5 of this dissertation.
+
+\begin{table}[H]
+  \caption{Proposed method against baseline methods.}
+  \label{tab:baselines}
+  \centering
+  \resizebox{\textwidth}{!}{%
+  \renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{lllll}
+    \toprule
+    \textbf{Method} & \textbf{View transformation} & \textbf{Physics constraints} & \textbf{Output} & \textbf{Est.\ FID}$\downarrow$ \\
+    \midrule
+    MARSGAN \cite{tao2021cassis} & Nadir SR only & None & 2D image & $\sim$180 \\
+    DiffusionSat (Mars fine-tune) \cite{khanna2024diffusionsat} & Nadir SR/inpainting & None & 2D image & $\sim$140 \\
+    CycleGAN (na\"{i}ve) & Nadir-to-perspective & None & 2D image & $\sim$110 \\
+    UNSB (no physics loss) \cite{kim2024unsb} & Nadir-to-perspective & None & 2D image & $\sim$80 \\
+    \textbf{Proposed (Ours)} & Nadir-to-perspective + 3D VR & Solar, Hapke, geological, perceptual & 3DGS scene & \textbf{$\leq$55} (target) \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+\noindent The literature-derived $\sim$110 FID estimate for a na\"{i}ve CycleGAN baseline is a useful point of comparison for the actual CycleGAN results reported in Chapter~5: the trained baseline currently scores substantially worse (269.9), and the diagnosis in Chapter~5 explains why that comparison is informative rather than merely disappointing.
+
+\section{Summary}
+
+This chapter has formalised the three-stage pipeline's mathematical basis, architecture, dataset targets, training strategy, and evaluation protocol, including four physics-informed loss terms designed to bound hallucination risk (Chapter~2) rather than relying on perceptual realism alone. The pipeline targets FID~$\leq$55, shadow-angle error~$<10^{\circ}$, hallucination rate~$<5\%$, and VR rendering~$>$72\,fps. The remaining chapters report what has actually been built and evaluated against this design so far: the real-resolution data pipeline (Chapter~4) and the CycleGAN baseline for Stage~2 (Chapters~4--5). Implementing the physics-constrained UNSB, Stage~1, and Stage~3 remains future work.

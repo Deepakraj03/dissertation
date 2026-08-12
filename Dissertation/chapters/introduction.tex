@@ -1,0 +1,40 @@
+\chapter{Introduction}
+
+Planetary exploration missions increasingly depend on immersive virtual-reality (VR) environments for mission planning, hazard assessment, and astronaut or rover-operator training. Building a convincing VR reconstruction of a Mars landing site, however, runs into a basic data problem: the only imagery available for almost every candidate site, including all ExoMars candidate landing areas, is nadir orbital imagery captured from orbit looking straight down, whereas a usable VR scene needs ground-level, perspective imagery of the kind a rover's own cameras produce after it has landed. This dissertation is concerned with closing that nadir-to-perspective domain gap using generative modelling, so that orbital data alone --- available years before any rover touches down --- can be turned into a physically plausible, explorable VR surface.
+
+The work is computational and experimental in nature: it combines remote-sensing data engineering (acquiring and correctly processing real orbital and rover imagery), generative model design and training (image-to-image translation and super-resolution networks), and, in later stages, real-time neural rendering. The concrete application context is ESA's ExoMars Rosalind Franklin rover mission, and the primary test site is Oxia Planum, the mission's selected landing area.
+
+\section{Background and Context}
+
+High-resolution orbital imagery of Mars is comparatively abundant: NASA's HiRISE instrument has imaged large fractions of the surface at up to 25\,cm/pixel, resolving individual boulders and small craters. This is nadir imagery --- captured looking straight down from orbit --- and it is systematically unlike the perspective, oblique, ground-level imagery captured by rover cameras such as NAVCAM, which show terrain from roughly a metre above the surface, with strong foreshortening, occlusion, and local lighting effects that a top-down orbital image simply does not contain. No dataset of geographically \emph{aligned} nadir/perspective Mars image pairs exists, because rover imagery only exists for the handful of sites a rover has actually visited, and even then the rover was never positioned to recreate an orbital viewing geometry. Any method that aims to synthesise rover-perspective imagery from orbital data must therefore work without paired supervision.
+
+This gap sits at the intersection of several active research areas surveyed in Chapter~2: single-image super-resolution (to recover resolution lost between coarser orbital instruments and HiRISE), unpaired image-to-image translation (CycleGAN-style methods, and more recent physics-informed variants such as the Neural Schr\"{o}dinger Bridge), neural scene rendering (NeRF and Gaussian Splatting for turning a set of synthetic views into an explorable 3D scene), and the emerging concern, specific to generative models used for scientific and mission-critical purposes, of hallucination: a model may produce a plausible-looking rock or crater that was never actually present, which is a materially different failure mode from a blurry or low-fidelity output. Existing single-modality approaches (pure super-resolution, or pure style-transfer GANs) each solve part of this problem but none combines resolution recovery, physically-grounded view translation, and real-time rendering into a single pipeline validated against Mars-specific physical plausibility criteria, which is the gap this dissertation addresses.
+
+\section{Objectives}
+
+The objectives below were carried forward from the initial project proposal and refined during the methodology stage (Chapter~3) once the literature review had established that no existing method closes the nadir-to-rover-perspective gap end-to-end for Mars surface synthesis:
+
+\begin{itemize}
+	\item \textbf{O1.} Produce nadir imagery at 25\,cm/pixel from coarser CaSSIS/CTX inputs when HiRISE coverage is absent.
+	\item \textbf{O2.} Translate unpaired HiRISE nadir patches into statistically plausible rover-perspective images whose photometric and morphometric properties are consistent with Mars surface physics.
+	\item \textbf{O3.} Reconstruct a real-time renderable 3D scene from the synthetic perspective images at VR frame rates ($\geq$\,72\,fps).
+	\item \textbf{O4.} Quantify the fidelity and physical plausibility of generated imagery against held-out real rover data and known planetary surface statistics.
+\end{itemize}
+
+Work to date has focused on the data engineering and baseline modelling required to make O1 and O2 tractable: building correct, real-resolution training corpora for both the orbital and rover domains, and implementing, training, and rigorously evaluating a CycleGAN baseline for O2 before moving to the physics-constrained architecture the methodology proposes. O3 and O4 remain future work.
+
+\section{Achievements}
+
+To date, the following has been completed:
+
+\begin{itemize}
+	\item A full literature review (Chapter~2) covering seven topic clusters --- orbital data constraints, super-resolution, image-to-image translation, digital terrain modelling, neural scene rendering, VR reconstruction, and generative hallucination --- synthesising 20 papers into a comparative analysis that motivates the proposed architecture.
+	\item A complete methodology (Chapter~3) formalising the three-stage pipeline, including the Neural Schr\"{o}dinger Bridge formulation with four physics-informed loss terms, and a full evaluation protocol against four baselines.
+	\item A real-resolution data pipeline (Chapter~4) that corrected a data-quality bug in the original HiRISE corpus (browse-quality \textasciitilde3\,m/px imagery masquerading as the intended 25\,cm/px product) and rebuilt it from genuine RDR products under a tight disk-quota constraint on the training machine.
+	\item A trained and evaluated CycleGAN baseline (Chapter~5) for the Stage~2 view-translation problem, including a specific, evidence-based diagnosis of why its current FID score (269.9) falls well short of the target ($\leq$\,55): a discriminator collapse traced to the epoch level using the training logs, not a vague appeal to ``GANs are unstable''.
+	\item An in-progress CTX/HiRISE co-registration pipeline for the Stage~1 super-resolution corpus, with a working smoke test on five image pairs.
+\end{itemize}
+
+\section{Overview of Dissertation}
+
+Chapter~2 reviews the literature underpinning each stage of the proposed pipeline and identifies the specific gap this work fills. Chapter~3 presents the methodology: the mathematical formulation of the three-stage architecture, the dataset design, and the evaluation framework. Chapter~4 describes what has actually been implemented so far --- the data acquisition and preprocessing pipelines for both the HiRISE and rover corpora, including the real-resolution corpus rebuild, and the CycleGAN model and training infrastructure built to establish a Stage~2 baseline. Chapter~5 presents the results of training that baseline: the loss behaviour over 50 epochs, the FID evaluation, representative sample translations, and a diagnosis of the specific failure mode observed, together with candidate fixes. Resolving that diagnosis, building the physics-constrained Neural Schr\"{o}dinger Bridge, completing the Stage~1 super-resolution corpus, and implementing and evaluating the Gaussian Splatting rendering stage remain as future work. This draft does not yet include a final Results/Evaluation chapter for the completed system or a Conclusions chapter, since that work is still in progress.

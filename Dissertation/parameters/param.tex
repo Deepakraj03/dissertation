@@ -1,0 +1,141 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%        parameters used for page setup and figure placement
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%line spacing
+\setstretch{1.5}%1.}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% change the allowed picture fractions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\renewcommand{\textfraction}{0.15}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.65}
+\renewcommand{\floatpagefraction}{0.6}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% set page dimensions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%put \hoffset = -1in then \oddsidemargin = left margin
+%put \voffset = -1in then \topmargin = top margin
+
+
+%\setmargins{leftmargin}{topmargin}{textwidth}{textheight}{headheight}...
+%       {headsep}{footheight}{footskip}
+%\setmargins{25mm}{15mm}{160mm}{250mm}{7mm}{7mm}{0pt}{10mm}
+\setmargins{40mm}{20mm}{150mm}{235mm}{7mm}{7mm}{0pt}{8mm}
+%6.5in15
+
+% DARACH's
+%\setlength{\hoffset}{-1.5in}%-1in}
+%\setlength{\voffset}{-1.5in}%-1in}
+%\setlength{\topmargin}{1.0in}%25in}
+%\setlength{\oddsidemargin}{1.5in}
+%\setlength{\textwidth}{6.25in}%5.75in}
+%\setlength{\textheight}{9.9in}%8.33in}
+%\setlength{\headheight}{8pt}%12pt}
+%\setlength{\headsep}{20pt}
+%\setlength{\footskip}{30pt}%48pt}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%       page header
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\pagestyle{fancyplain}
+%\renewcommand{\chaptermark}[1]{\markboth{#1}{}}
+%\renewcommand{\sectionmark}[1]{\markright{\thesection\ #1}}
+\renewcommand{\subsectionmark}[1]{\markright{\thesubsection\ #1}}
+\rhead{\fancyplain{}{\bfseries\rightmark}} \lhead{}
+    \lhead{}  % TO ADD THE DATE TO THE HEADING, need entry even if empty
+    %\lhead{\today}  % TO ADD THE DATE TO THE HEADING, need entry even if empty
+\addtocounter{secnumdepth}{1} \addtocounter{tocdepth}{1}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%*********************************
+%needed for table and figure captions in minipage
+\makeatletter
+    \newcommand\figcaption{\def\@captype{figure}\caption}
+    \newcommand\tabcaption{\def\@captype{table}\caption}
+\makeatother
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%                set lengths used in figures
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%********************* two image
+\newlength{\twoimagevskip}
+\setlength{\twoimagevskip}{7pt}
+
+\newlength{\twoimagehskip}
+\setlength{\twoimagehskip}{0.03\textwidth} %0.07
+
+\newlength{\twoimagewidth}
+\setlength{\twoimagewidth}{0.45\textwidth} %0.4
+
+%********************* three image
+\newlength{\threeimagehskip}
+\setlength{\threeimagehskip}{8pt}
+
+\newlength{\threeimagevskip}
+\setlength{\threeimagevskip}{4pt}
+
+\newlength{\threeimagewidth}
+\setlength{\threeimagewidth}{.26\textwidth}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%to raise/lower table values half a box
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\up}[1]{\raisebox{1.5ex}[0cm][0cm]{#1}}
+\newcommand{\down}[1]{\raisebox{-1.5ex}[0cm][0cm]{#1}}
+
+\newlength{\littlespace}
+\setlength{\littlespace}{0.02\textwidth} %0.07
+
+\newlength{\figwidth}
+\setlength{\figwidth}{0.6\textwidth} %0.07
+
+\newlength{\figwide}
+\setlength{\figwide}{0.8\textwidth} %0.07
+
+\newlength{\twoskip}
+\setlength{\twoskip}{0.06\textheight} %0.07
+
+\newcommand{\twodown}[2]{\includegraphics[width=\figwidth]{#1}\vspace{\twoskip}
+\includegraphics[width=\figwidth]{#2}\vspace{\twoskip}}
+
+\newlength{\threeskip}
+\setlength{\threeskip}{0.03\textheight} %0.07
+
+\newcommand{\onedown}[1]{\includegraphics[width=\figwidth]{#1}\vspace{0.01\textheight}}
+\newcommand{\onewide}[1]{\includegraphics[width=\figwide]{#1}\vspace{0.01\textheight}}
+
+\newcommand{\threedown}[3]{\includegraphics[width=\figwidth]{#1}\vspace{\threeskip}
+\includegraphics[width=\figwidth]{#2}\vspace{\threeskip}
+\includegraphics[width=\figwidth]{#3}\vspace{0.01\textheight}}
+
+\newlength{\fiveskip}
+\setlength{\fiveskip}{0.09\textheight} %0.07
+
+\newlength{\fivehoz}
+\setlength{\fivehoz}{0.04\textwidth} %0.07
+
+\newlength{\fivewidth}
+\setlength{\fivewidth}{0.45\textwidth} %0.07
+
+\newcommand{\fivedown}[5]{\includegraphics[width=\fivewidth]{#1} \hspace{\fivehoz}
+\includegraphics[width=\fivewidth]{#2}\vspace{\fiveskip}
+\includegraphics[width=\fivewidth]{#3}\hspace{\fivehoz}
+\includegraphics[width=\fivewidth]{#4}\vspace{\fiveskip}
+\includegraphics[width=\fivewidth]{#5}\vspace{\fiveskip}}

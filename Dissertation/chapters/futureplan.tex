@@ -1,0 +1,28 @@
+\chapter{Future Plan}
+\label{ch:futureplan}
+
+This chapter sets out the work remaining to complete the dissertation, in the order it is planned to be carried out, and how each item connects back to the objectives in Section~1.2.
+
+\section{Resolve the CycleGAN Discriminator Imbalance}
+
+The most immediate task is acting on the diagnosis in Chapter~5: closing the noise-statistics gap between the real-resolution HiRISE corpus and the rover corpus (most likely via mild denoising of HiRISE patches, matched synthetic grain on the rover side, or both), then retraining and re-evaluating against the same FID and visual-inspection protocol used in Chapter~5. If the diagnosis is correct, FID should drop substantially and the sample-grid translations should stop showing the near-identity mapping documented in Section~5.3. This closes out the CycleGAN baseline for Objective~O2 and establishes the well-understood point of comparison the physics-constrained UNSB is meant to improve on.
+
+\section{Complete the Stage 1 Super-Resolution Corpus}
+
+In parallel with the CycleGAN work, a CTX/HiRISE co-registration pipeline for Objective~O1 is under development: a HiRISE footprint index parser, a Murray Lab CTX mosaic resolver, an orchestration script that produces paired low-/high-resolution crops, and a visual QA tool. A five-image smoke test has succeeded with all pairs correctly aligned; the next steps are a visual confirmation of those five preview pairs, followed by the full batch run across the intended observation set, before any Stage~1 model training begins.
+
+\section{Implement the Physics-Constrained UNSB (Objective O2)}
+
+Once the CycleGAN baseline is resolved, the Neural Schr\"{o}dinger Bridge architecture and the four physics-informed loss terms specified in Chapter~3 (Section~3.1) will be implemented: the shadow-direction, Hapke photometric, and geological morphometry auxiliary networks must each be trained separately before the main IPFP training loop (Algorithm~\ref{alg:stage2}) can run. This is the central remaining engineering task and the dissertation's core methodological contribution. The CycleGAN results in Chapter~5 already provide a concrete, measured baseline (FID, and the specific discriminator-imbalance failure mode) that the physics-constrained architecture will be evaluated against, rather than only against literature-derived estimates.
+
+\section{Gaussian Splatting Rendering (Objective O3)}
+
+Once Stage~2 produces usable synthetic perspective imagery, a 3D Gaussian Splatting scene will be trained on the resulting multi-view set, following the reference implementation and the MADNet-2.0-seeded initialisation described in Chapter~3, and benchmarked for render throughput against the $\geq$72\,fps VR target.
+
+\section{Full Evaluation (Objective O4)}
+
+The evaluation framework in Chapter~3 (Section~3.4) --- FID and LPIPS, structural fidelity against synthetic ground truth, shadow-angle error, Hapke BRDF residual, hallucination rate, and VR render quality --- will be applied to the completed pipeline and compared against the four baselines in Table~\ref{tab:baselines}, including the CycleGAN baseline now measured directly (Chapter~5) rather than estimated from the literature.
+
+\section{Indicative Timeline}
+
+Resolving the CycleGAN diagnosis and completing the Stage~1 co-registration batch are the near-term priorities, since both feed directly into Stage~2 training. UNSB implementation and training is the largest remaining task and is expected to require the majority of the time before the next milestone. Gaussian Splatting integration and the full evaluation pass follow once Stage~2 produces synthetic imagery of sufficient quality, with time reserved at the end for writing the Results/Evaluation and Conclusions chapters that this draft does not yet include.
