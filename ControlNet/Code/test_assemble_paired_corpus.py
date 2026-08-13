@@ -7,6 +7,7 @@ import rasterio
 
 from assemble_paired_corpus import (
     group_products_by_covering_dtm, process_dtm_group, split_pairs_and_move,
+    render_pose_condition_map,
 )
 from parse_rover_pose import RoverPose
 from dtm_coverage import DtmCoverageRecord
@@ -443,3 +444,33 @@ def test_process_dtm_group_tags_manifest_rows_with_source_mission(
     result2 = process_dtm_group(dtm_record, poses, scratch_dir, out_dir,
                                 source_mission="M20")
     assert result2["source_mission"] == "M20"
+
+
+def test_render_pose_condition_map_returns_none_when_pixel_out_of_bounds(
+        tmp_path, monkeypatch):
+    dtm_path = tmp_path / "DTM_A.IMG"
+    _write_fake_dtm_raster(dtm_path)
+    pose = _make_pose("P1", lat=-4.5, lon=137.5)
+
+    monkeypatch.setattr("assemble_paired_corpus.latlon_to_dtm_pixel",
+                        lambda dtm_path, lat, lon: None)
+
+    result = render_pose_condition_map(dtm_path, _make_varied_arrays(),
+                                       transform=None, pose=pose)
+    assert result is None
+
+
+def test_render_pose_condition_map_renders_when_in_bounds(tmp_path, monkeypatch):
+    dtm_path = tmp_path / "DTM_A.IMG"
+    _write_fake_dtm_raster(dtm_path)
+    pose = _make_pose("P1", lat=-4.5, lon=137.5, pitch_deg=-10.0)
+
+    monkeypatch.setattr("assemble_paired_corpus.latlon_to_dtm_pixel",
+                        lambda dtm_path, lat, lon: (25.0, 25.0))
+    monkeypatch.setattr("assemble_paired_corpus.compass_heading_to_render_heading",
+                        lambda compass_deg, transform: 0.0)
+
+    result = render_pose_condition_map(dtm_path, _make_varied_arrays(),
+                                       transform=None, pose=pose)
+    assert result is not None
+    assert result.shape == (256, 256)

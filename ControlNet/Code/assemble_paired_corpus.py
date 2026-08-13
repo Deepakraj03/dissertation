@@ -50,6 +50,30 @@ NAVCAM_JPG_BASE = "https://planetarydata.jpl.nasa.gov/img/data/msl/msl_navcam_ra
 MAX_ABS_PITCH_DEG = 20.0
 
 
+def render_pose_condition_map(dtm_path: Path, arrays, transform,
+                              pose: RoverPose) -> "np.ndarray | None":
+    """Render pose's real predicted ground view against arrays (already
+    loaded via load_dtm_arrays), or None if pose's lat/lon falls outside
+    dtm_path's raster or the render hits a NaN-adjacent DTM cell. Extracted
+    from process_dtm_group's inline loop body so the pitch-bucket
+    investigation tool (render_pitch_bucket_samples.py) renders through
+    the exact same path production does, not a parallel reimplementation
+    that could silently diverge."""
+    pixel = latlon_to_dtm_pixel(dtm_path, pose.latitude, pose.longitude)
+    if pixel is None:
+        return None
+    row, col = pixel
+    heading = compass_heading_to_render_heading(pose.compass_heading_deg, transform)
+    try:
+        return render_ground_view(
+            arrays.heightmap, arrays.albedo, arrays.pixel_scale_m,
+            camera_row=row, camera_col=col, heading_deg=heading,
+            pitch_deg=pose.pitch_deg,
+        )
+    except ValueError:
+        return None
+
+
 def fetch_target_photo(product_id: str, sol: int, dest_path: Path) -> bool:
     """Download product_id's real full-frame browse JPG — same archive path
     and filename convention download_rover.py already uses successfully."""
@@ -106,20 +130,8 @@ def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
         for pose in poses:
             if abs(pose.pitch_deg) > max_pitch_deg:
                 continue
-            pixel = latlon_to_dtm_pixel(dtm_path, pose.latitude, pose.longitude)
-            if pixel is None:
-                continue
-            row, col = pixel
-            heading = compass_heading_to_render_heading(
-                pose.compass_heading_deg, transform,
-            )
-            try:
-                condition_map = render_ground_view(
-                    arrays.heightmap, arrays.albedo, arrays.pixel_scale_m,
-                    camera_row=row, camera_col=col, heading_deg=heading,
-                    pitch_deg=pose.pitch_deg,
-                )
-            except ValueError:
+            condition_map = render_pose_condition_map(dtm_path, arrays, transform, pose)
+            if condition_map is None:
                 continue
 
             if ground_entropy(condition_map) < ENTROPY_TH:
