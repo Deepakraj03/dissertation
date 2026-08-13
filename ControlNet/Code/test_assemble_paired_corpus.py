@@ -366,3 +366,80 @@ def test_split_pairs_and_move_keeps_condition_and_target_together(tmp_path):
                   for p in (out_dir / split).glob("*_target.jpg")}
         assert conditions == targets
     assert result["total_pairs"] == 4
+
+
+def test_process_dtm_group_respects_custom_max_pitch_deg(tmp_path, monkeypatch):
+    """A caller-supplied max_pitch_deg overrides the module default --
+    needed so the pitch-bucket investigation tool (Task 3) can probe wider
+    thresholds than the current MAX_ABS_PITCH_DEG=20.0 without editing the
+    module constant."""
+    dtm_record = _make_record("DTM_A", -5.0, -4.0, 137.0, 138.0)
+    poses = [_make_pose("STEEP", lat=-4.5, lon=137.5, pitch_deg=-40.0)]
+
+    fake_fetch_result = {
+        "product_id": "DTM_A", "status": "ok",
+        "dtm_path": str(tmp_path / "DTM_A.IMG"),
+        "ortho_paths": {"obs": str(tmp_path / "obs_ORTHO.JP2")},
+    }
+    _write_fake_dtm_raster(tmp_path / "DTM_A.IMG")
+    (tmp_path / "obs_ORTHO.JP2").write_bytes(b"fake")
+
+    monkeypatch.setattr("assemble_paired_corpus.fetch_dtm_and_orthos",
+                        lambda record, scratch, dest: fake_fetch_result)
+    monkeypatch.setattr("assemble_paired_corpus.load_dtm_arrays",
+                        lambda dtm_path, ortho_path: _make_varied_arrays())
+    monkeypatch.setattr("assemble_paired_corpus.latlon_to_dtm_pixel",
+                        lambda dtm_path, lat, lon: (25.0, 25.0))
+    monkeypatch.setattr("assemble_paired_corpus.compass_heading_to_render_heading",
+                        lambda compass_deg, transform: 0.0)
+    monkeypatch.setattr("assemble_paired_corpus.fetch_target_photo",
+                        lambda product_id, sol, dest_path: dest_path.write_bytes(b"\xff\xd8\xff fake jpg") or True)
+
+    out_dir = tmp_path / "out"
+    scratch_dir = tmp_path / "scratch"
+    # Default MAX_ABS_PITCH_DEG (20.0) would skip this -40deg pose; an
+    # explicit wider max_pitch_deg should keep it.
+    result = process_dtm_group(dtm_record, poses, scratch_dir, out_dir,
+                               max_pitch_deg=45.0)
+
+    assert result["saved_ids"] == ["STEEP"]
+
+
+def test_process_dtm_group_tags_manifest_rows_with_source_mission(
+        tmp_path, monkeypatch):
+    """source_mission defaults to 'MSL' (every pair produced by this plan
+    is Gale/Curiosity) and is threaded into the returned dict for the
+    manifest writer (Task 6) to pick up."""
+    dtm_record = _make_record("DTM_A", -5.0, -4.0, 137.0, 138.0)
+    poses = [_make_pose("P1", lat=-4.5, lon=137.5)]
+
+    fake_fetch_result = {
+        "product_id": "DTM_A", "status": "ok",
+        "dtm_path": str(tmp_path / "DTM_A.IMG"),
+        "ortho_paths": {"obs": str(tmp_path / "obs_ORTHO.JP2")},
+    }
+    _write_fake_dtm_raster(tmp_path / "DTM_A.IMG")
+    (tmp_path / "obs_ORTHO.JP2").write_bytes(b"fake")
+
+    monkeypatch.setattr("assemble_paired_corpus.fetch_dtm_and_orthos",
+                        lambda record, scratch, dest: fake_fetch_result)
+    monkeypatch.setattr("assemble_paired_corpus.load_dtm_arrays",
+                        lambda dtm_path, ortho_path: _make_varied_arrays())
+    monkeypatch.setattr("assemble_paired_corpus.latlon_to_dtm_pixel",
+                        lambda dtm_path, lat, lon: (25.0, 25.0))
+    monkeypatch.setattr("assemble_paired_corpus.compass_heading_to_render_heading",
+                        lambda compass_deg, transform: 0.0)
+    monkeypatch.setattr("assemble_paired_corpus.fetch_target_photo",
+                        lambda product_id, sol, dest_path: dest_path.write_bytes(b"\xff\xd8\xff fake jpg") or True)
+
+    out_dir = tmp_path / "out"
+    scratch_dir = tmp_path / "scratch"
+    result = process_dtm_group(dtm_record, poses, scratch_dir, out_dir)
+    assert result["source_mission"] == "MSL"
+
+    # Recreate the fake DTM since process_dtm_group deletes it in its finally block.
+    _write_fake_dtm_raster(tmp_path / "DTM_A.IMG")
+    (tmp_path / "obs_ORTHO.JP2").write_bytes(b"fake")
+    result2 = process_dtm_group(dtm_record, poses, scratch_dir, out_dir,
+                                source_mission="M20")
+    assert result2["source_mission"] == "M20"

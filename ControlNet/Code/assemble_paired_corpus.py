@@ -70,7 +70,9 @@ def group_products_by_covering_dtm(poses: list[RoverPose],
 
 
 def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
-                      scratch_dir: Path, out_dir: Path) -> dict:
+                      scratch_dir: Path, out_dir: Path,
+                      max_pitch_deg: float = MAX_ABS_PITCH_DEG,
+                      source_mission: str = "MSL") -> dict:
     """Download dtm_record's DTM+ortho once, render every pose in poses
     from its real (row, col, heading) on that DTM, fetch each pose's real
     target photo, save both to out_dir, then delete the raw DTM/ortho
@@ -90,7 +92,7 @@ def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
         if fetch_result["status"] != "ok":
             return {"product_id": dtm_record.product_id,
                    "status": fetch_result["status"], "pairs_saved": 0,
-                   "saved_ids": []}
+                   "saved_ids": [], "source_mission": source_mission}
 
         dtm_path = Path(fetch_result["dtm_path"])
         ortho_path = Path(next(iter(fetch_result["ortho_paths"].values())))
@@ -102,7 +104,7 @@ def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
         out_dir.mkdir(parents=True, exist_ok=True)
         saved_ids = []
         for pose in poses:
-            if abs(pose.pitch_deg) > MAX_ABS_PITCH_DEG:
+            if abs(pose.pitch_deg) > max_pitch_deg:
                 continue
             pixel = latlon_to_dtm_pixel(dtm_path, pose.latitude, pose.longitude)
             if pixel is None:
@@ -136,7 +138,8 @@ def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
             saved_ids.append(pose.product_id)
 
         return {"product_id": dtm_record.product_id, "status": "ok",
-               "pairs_saved": len(saved_ids), "saved_ids": saved_ids}
+               "pairs_saved": len(saved_ids), "saved_ids": saved_ids,
+               "source_mission": source_mission}
     finally:
         Path(fetch_result.get("dtm_path", expected_dtm_path)).unlink(missing_ok=True)
         ortho_paths_to_clean = list(fetch_result.get("ortho_paths", {}).values()) \
@@ -178,6 +181,9 @@ def main():
                         default=list(range(1, 4700, 200)),
                         help="Sols to sample candidate Navcam images from")
     parser.add_argument("--per-sol", type=int, default=4)
+    parser.add_argument("--max-pitch-deg", type=float, default=MAX_ABS_PITCH_DEG,
+                        help="Max abs(pitch_deg) for a pose to be rendered "
+                             "(see MAX_ABS_PITCH_DEG's module comment)")
     args = parser.parse_args()
 
     root = Path(__file__).parent.parent
@@ -222,7 +228,8 @@ def main():
     for dtm_product_id, group_poses in grouped.items():
         record = next(r for r in dtm_records if r.product_id == dtm_product_id)
         print(f"\nProcessing DTM {dtm_product_id} ({len(group_poses)} candidate poses)…")
-        result = process_dtm_group(record, group_poses, scratch_dir, staging_dir)
+        result = process_dtm_group(record, group_poses, scratch_dir, staging_dir,
+                                   max_pitch_deg=args.max_pitch_deg)
         print(f"  {result['status']} — {result.get('pairs_saved', 0)} pairs")
         manifest.append(result)
         saved_ids.extend(result.get("saved_ids", []))
