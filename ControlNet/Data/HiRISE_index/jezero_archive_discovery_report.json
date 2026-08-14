@@ -1,0 +1,17 @@
+{
+  "file_root_probe": {
+    "https://planetarydata.jpl.nasa.gov/img/data/mars2020/mars2020_navcam_ops_raw/data/sol/00001/ids/edr/NLB_0001_0667035586_056EDR_N0010052AUT_04096_00_2I3J03.xml": "html_not_data",
+    "https://planetarydata.jpl.nasa.gov/img/data/mars2020/mars2020_navcam_ops_raw/data/sol/00001/ids/edr/NLB_0001_0667035586_056EDR_N0010052AUT_04096_00_2I3J03.IMG": "html_not_data",
+    "https://pdsimage2.wr.usgs.gov/archive/mars2020/mars2020_navcam_ops_raw/data/sol/00001/ids/edr/NLB_0001_0667035586_056EDR_N0010052AUT_04096_00_2I3J03.xml": "http_error",
+    "https://pdsimage2.wr.usgs.gov/archive/mars2020/mars2020_navcam_ops_raw/data/sol/00001/ids/edr/NLB_0001_0667035586_056EDR_N0010052AUT_04096_00_2I3J03.IMG": "http_error"
+  },
+  "places_probe": {
+    "url": "https://pds-geosciences.wustl.edu/m2020/urn-nasa-pds-mars2020_rover_places/data_localizations/",
+    "status_code": 200,
+    "content_length": 2362,
+    "listing_sample": "<html><head><title>pds-geosciences.wustl.edu - /m2020/urn-nasa-pds-mars2020_rover_places/data_localizations/</title></head><body><H1>pds-geosciences.wustl.edu - /m2020/urn-nasa-pds-mars2020_rover_places/data_localizations/</H1><hr>\r\n\r\n<pre><A HREF=\"/m2020/urn-nasa-pds-mars2020_rover_places/\">[To Parent Directory]</A><br><br> 7/30/2026  6:55 PM      8684070 <A HREF=\"/m2020/urn-nasa-pds-mars2020_rover_places/data_localizations/best_interp.csv\">best_interp.csv</A><br> 7/30/2026  6:55 PM        1589"
+  },
+  "real_content_urls": [],
+  "geometry_keywords_found": [],
+  "viable_for_ingestion": false
+}
