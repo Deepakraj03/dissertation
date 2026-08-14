@@ -16,14 +16,12 @@ from dtm_coverage import query_dtm_coverage, signed_lon_to_0_360
 from dtm_arrays import load_dtm_arrays
 from download_hirise import REGIONS
 from fetch_hirise_dtm import fetch_dtm_and_orthos
-from hirise_fullres import download_with_verify
 
 from assemble_paired_corpus import (
     fetch_target_photo, gather_candidate_poses, group_products_by_covering_dtm,
     render_pose_condition_map,
 )
 from parse_rover_pose import RoverPose
-from preprocess import save_patch
 from rover_localization import download_localization_csv, parse_localization_csv
 
 import rasterio
@@ -105,11 +103,25 @@ def main():
             continue
 
         print(f"\nDTM {dtm_product_id}: fetching for pitch-bucket sampling…")
-        fetch_result = fetch_dtm_and_orthos(record, scratch_dir, scratch_dir)
-        if fetch_result["status"] != "ok":
-            print(f"  skip ({fetch_result['status']})")
-            continue
+        # fetch_dtm_and_orthos downloads the DTM .IMG first, then orthos
+        # separately -- a later-step failure (e.g. ortho_download_failed_for_*)
+        # returns a status dict with no dtm_path/ortho_paths keys even though
+        # the DTM (and possibly one ortho) already landed on disk. Compute
+        # the expected paths up front from scratch_dir's naming convention
+        # (same pattern as assemble_paired_corpus.py's process_dtm_group) so
+        # the finally block can still find and delete them on that path.
+        expected_dtm_path = scratch_dir / f"{record.product_id}.IMG"
+        expected_ortho_paths = [
+            scratch_dir / f"{obs_id}_ORTHO.JP2"
+            for obs_id in (record.obs_id_a, record.obs_id_b) if obs_id
+        ]
+        fetch_result = {}
         try:
+            fetch_result = fetch_dtm_and_orthos(record, scratch_dir, scratch_dir)
+            if fetch_result["status"] != "ok":
+                print(f"  skip ({fetch_result['status']})")
+                continue
+
             dtm_path = Path(fetch_result["dtm_path"])
             ortho_path = Path(next(iter(fetch_result["ortho_paths"].values())))
             arrays = load_dtm_arrays(dtm_path, ortho_path)
@@ -133,8 +145,10 @@ def main():
                     target_path.unlink(missing_ok=True)
                     print(f"  [{bucket_key}] saved {pose.product_id}")
         finally:
-            Path(fetch_result.get("dtm_path", "")).unlink(missing_ok=True)
-            for p in fetch_result.get("ortho_paths", {}).values():
+            Path(fetch_result.get("dtm_path", expected_dtm_path)).unlink(missing_ok=True)
+            ortho_paths_to_clean = list(fetch_result.get("ortho_paths", {}).values()) \
+                or expected_ortho_paths
+            for p in ortho_paths_to_clean:
                 Path(p).unlink(missing_ok=True)
 
     print(f"\nDone. Inspect side-by-side comparisons under {out_dir}/<bucket>/")
