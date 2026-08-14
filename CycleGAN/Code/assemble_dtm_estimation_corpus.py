@@ -126,9 +126,14 @@ def main():
     parser.add_argument("--band-deg", type=float, default=10.0)
     parser.add_argument("--limit", type=int, default=None,
                         help="Process at most this many DTM products (smoke testing)")
+    parser.add_argument("--out-root", type=str, default=None,
+                        help="Root directory for Data/ output (default: this repo's"
+                             " CycleGAN/ directory). Override to a fast scratch"
+                             " filesystem on clusters where the default is slow NFS"
+                             " -- this corpus can run to tens of thousands of patches.")
     args = parser.parse_args()
 
-    root = Path(__file__).parent.parent
+    root = Path(args.out_root) if args.out_root else Path(__file__).parent.parent
 
     print("Querying global HiRISE stereo DTM catalog…")
     records = query_global_dtm_coverage(band_deg=args.band_deg)

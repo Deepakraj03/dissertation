@@ -157,7 +157,6 @@ def parse_args():
                         help="Directory containing train/ (and optionally val/)"
                              " with <id>_condition.png/<id>_target.npy pairs")
     parser.add_argument("--output_dir", type=str, default="dtm_estimator_output")
-    parser.add_argument("--resolution", type=int, default=256)
     parser.add_argument("--train_batch_size", type=int, default=4)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=4)
     parser.add_argument("--learning_rate", type=float, default=1e-5)
