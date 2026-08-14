@@ -226,9 +226,9 @@ def gather_candidate_poses(sols: list[int], per_sol: int,
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sols", type=int, nargs="+",
-                        default=list(range(1, 4700, 200)),
+                        default=list(range(1, 4700, 50)),
                         help="Sols to sample candidate Navcam images from")
-    parser.add_argument("--per-sol", type=int, default=4)
+    parser.add_argument("--per-sol", type=int, default=8)
     parser.add_argument("--max-pitch-deg", type=float, default=MAX_ABS_PITCH_DEG,
                         help="Max abs(pitch_deg) for a pose to be rendered "
                              "(see MAX_ABS_PITCH_DEG's module comment)")
