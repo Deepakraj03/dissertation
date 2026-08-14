@@ -242,8 +242,10 @@ def main():
     parser.add_argument("--max-pitch-deg", type=float, default=MAX_ABS_PITCH_DEG,
                         help="Max abs(pitch_deg) for a pose to be rendered "
                              "(see MAX_ABS_PITCH_DEG's module comment)")
+    # Oxia Planum is explicitly out of scope — no real rover target photos
+    # exist there, and this pipeline requires paired condition maps + real targets.
     parser.add_argument("--region", type=str, default="gale_crater",
-                        choices=list(REGIONS.keys()),
+                        choices=[k for k in REGIONS if k != "oxia_planum"],
                         help="REGIONS key to query DTM coverage for")
     args = parser.parse_args()
 

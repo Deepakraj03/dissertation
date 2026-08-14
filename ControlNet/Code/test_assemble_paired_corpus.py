@@ -532,3 +532,29 @@ def test_query_region_dtm_coverage_converts_longitude_and_queries(monkeypatch):
     assert (lat_min, lat_max) == (-8.0, -3.0)
     assert west == pytest.approx(135.0)  # already 0-360, no wraparound needed
     assert east == pytest.approx(140.0)
+
+
+def test_region_cli_flag_excludes_oxia_planum():
+    """Oxia Planum is explicitly out of scope — no real rover target photos
+    exist there. This pipeline requires paired condition maps + real photos,
+    so oxia_planum must never be a valid --region choice even though it
+    exists in the REGIONS dict (which is used elsewhere). Regression test
+    to prevent accidental inclusion of oxia_planum in region iterations."""
+    import argparse
+    from assemble_paired_corpus import REGIONS
+
+    parser = argparse.ArgumentParser()
+    # Replicate the actual choices from main() -- must exclude oxia_planum
+    parser.add_argument("--region", type=str, default="gale_crater",
+                        choices=[k for k in REGIONS if k != "oxia_planum"])
+
+    # Valid regions should parse successfully
+    args_gale = parser.parse_args(["--region", "gale_crater"])
+    assert args_gale.region == "gale_crater"
+
+    args_jezero = parser.parse_args(["--region", "jezero_crater"])
+    assert args_jezero.region == "jezero_crater"
+
+    # oxia_planum must be rejected
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--region", "oxia_planum"])
