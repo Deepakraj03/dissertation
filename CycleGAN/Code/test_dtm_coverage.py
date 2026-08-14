@@ -5,6 +5,7 @@ from dtm_coverage import (
     parse_ode_response,
     signed_lon_to_0_360,
     build_coverage_report,
+    query_global_dtm_coverage,
 )
 
 SAMPLE_RESPONSE_MULTI = {
@@ -154,3 +155,78 @@ def test_build_coverage_report_shape():
     }
     assert report["count"] == 1
     assert report["records"][0]["obs_id_a"] == "ESP_015985_2040"
+
+
+def _fake_record(product_id, min_lat):
+    return DtmCoverageRecord(
+        product_id=product_id, dtm_url="", obs_id_a="", obs_id_b="",
+        min_lat=min_lat, max_lat=min_lat + 0.1, min_lon=0.0, max_lon=1.0,
+        comment="", files_url="",
+    )
+
+
+def test_query_global_dtm_coverage_no_split_when_under_cap():
+    calls = []
+
+    def fake_query(min_lat, max_lat, west, east):
+        calls.append((min_lat, max_lat))
+        return [_fake_record("A", min_lat)]
+
+    records = query_global_dtm_coverage(band_deg=180.0, query_fn=fake_query)
+
+    # A single global band (-90, 90) under the 100-result cap must not be
+    # split -- only one query per top-level band.
+    assert calls == [(-90.0, 90.0)]
+    assert [r.product_id for r in records] == ["A"]
+
+
+def test_query_global_dtm_coverage_splits_band_at_cap():
+    calls = []
+
+    def fake_query(min_lat, max_lat, west, east):
+        calls.append((min_lat, max_lat))
+        # Simulate the real ODE cap: the full band looks capped at 100,
+        # each half is genuinely under it.
+        if (min_lat, max_lat) == (-90.0, 90.0):
+            return [_fake_record(f"CAP{i}", min_lat) for i in range(100)]
+        return [_fake_record(f"{min_lat}", min_lat)]
+
+    records = query_global_dtm_coverage(band_deg=180.0, min_band_deg=1.0,
+                                        query_fn=fake_query)
+
+    # First the full band (hits cap, discarded in favor of its halves),
+    # then each half queried once.
+    assert (-90.0, 90.0) in calls
+    assert (-90.0, 0.0) in calls
+    assert (0.0, 90.0) in calls
+    assert {r.product_id for r in records} == {"-90.0", "0.0"}
+
+
+def test_query_global_dtm_coverage_dedupes_across_band_boundaries():
+    def fake_query(min_lat, max_lat, west, east):
+        # A DTM footprint straddling the boundary is returned by both
+        # adjacent bands' queries -- must not appear twice in the result.
+        return [_fake_record("STRADDLES", min_lat), _fake_record(f"UNIQUE{min_lat}", min_lat)]
+
+    records = query_global_dtm_coverage(band_deg=90.0, query_fn=fake_query)
+
+    ids = [r.product_id for r in records]
+    assert ids.count("STRADDLES") == 1
+
+
+def test_query_global_dtm_coverage_stops_recursing_at_min_band_deg():
+    calls = []
+
+    def fake_query(min_lat, max_lat, west, east):
+        calls.append((min_lat, max_lat))
+        return [_fake_record("STILL_CAPPED", min_lat) for _ in range(100)]
+
+    # Every band looks capped, including ones at the recursion floor --
+    # must terminate (accepting the truncated 100) rather than recurse
+    # forever.
+    records = query_global_dtm_coverage(band_deg=2.0, min_band_deg=1.0,
+                                        query_fn=fake_query)
+
+    assert len(records) > 0
+    smallest_band = min(calls, key=lambda b: b[1] - b[0])
+    assert (smallest_band[1] - smallest_band[0]) <= 1.0 + 1e-9

@@ -103,6 +103,44 @@ def query_dtm_coverage(min_lat: float, max_lat: float,
     return parse_ode_response(r.json())
 
 
+def _query_band_recursive(min_lat: float, max_lat: float, query_fn,
+                          min_band_deg: float) -> list[DtmCoverageRecord]:
+    records = query_fn(min_lat, max_lat, 0.0, 360.0)
+    if len(records) < 100 or (max_lat - min_lat) <= min_band_deg:
+        return records
+    mid = (min_lat + max_lat) / 2
+    return (_query_band_recursive(min_lat, mid, query_fn, min_band_deg)
+           + _query_band_recursive(mid, max_lat, query_fn, min_band_deg))
+
+
+def query_global_dtm_coverage(band_deg: float = 10.0, min_band_deg: float = 0.5,
+                              query_fn=query_dtm_coverage) -> list[DtmCoverageRecord]:
+    """Full global HiRISE stereo DTM catalog, working around the ODE API's
+    100-result-per-query cap. Verified 2026-08-14: a single global query
+    truncates at 100; even 10-degree latitude bands still cap near the
+    equator (Mars's most HiRISE-imaged latitudes). Recursively halves any
+    band that comes back at exactly 100 (the cap signature) down to
+    min_band_deg, rather than hardcoding a fixed split depth that could
+    silently under-cover a denser future catalog. Full 0-360 longitude is
+    queried in every band -- splitting was only ever needed on latitude in
+    manual testing. Deduplicates by product_id, since a DTM footprint
+    straddling a band boundary is returned by both adjacent queries."""
+    all_records: list[DtmCoverageRecord] = []
+    lat = -90.0
+    while lat < 90.0:
+        band_max = min(lat + band_deg, 90.0)
+        all_records.extend(_query_band_recursive(lat, band_max, query_fn, min_band_deg))
+        lat = band_max
+
+    seen: set[str] = set()
+    deduped = []
+    for r in all_records:
+        if r.product_id not in seen:
+            seen.add(r.product_id)
+            deduped.append(r)
+    return deduped
+
+
 def signed_lon_to_0_360(lon: float) -> float:
     """Convert -180..180 signed longitude to 0-360 East, matching ODE's
     convention (inverse of hirise_index.py's _to_signed_lon)."""
