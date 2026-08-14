@@ -187,6 +187,25 @@ def split_pairs_and_move(product_ids: list[str], staging_dir: Path,
            "split_counts": {k: len(v) for k, v in splits.items()}}
 
 
+def gather_candidate_poses(sols: list[int], per_sol: int,
+                           localization: dict) -> list[RoverPose]:
+    """List up to per_sol full-frame Navcam products per sol in sols,
+    parse each into a real pose, skipping (not raising on) a sol whose
+    listing request fails or a product whose label doesn't parse --
+    same posture as every other fetch step in this pipeline."""
+    poses = []
+    for sol in sols:
+        try:
+            products = list_navcam_products_for_sol(sol)[:per_sol]
+        except Exception:
+            continue
+        for product_id in products:
+            pose = fetch_and_parse_pose(product_id, sol, localization)
+            if pose is not None:
+                poses.append(pose)
+    return poses
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sols", type=int, nargs="+",
@@ -216,16 +235,7 @@ def main():
     localization = parse_localization_csv(csv_path)
 
     print(f"Gathering candidate poses across sols {args.sols}…")
-    poses = []
-    for sol in args.sols:
-        try:
-            products = list_navcam_products_for_sol(sol)[:args.per_sol]
-        except Exception:
-            continue
-        for product_id in products:
-            pose = fetch_and_parse_pose(product_id, sol, localization)
-            if pose is not None:
-                poses.append(pose)
+    poses = gather_candidate_poses(args.sols, args.per_sol, localization)
     print(f"{len(poses)} candidate poses parsed")
 
     grouped = group_products_by_covering_dtm(poses, dtm_records)

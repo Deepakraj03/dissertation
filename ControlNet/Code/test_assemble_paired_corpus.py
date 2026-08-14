@@ -7,7 +7,7 @@ import rasterio
 
 from assemble_paired_corpus import (
     group_products_by_covering_dtm, process_dtm_group, split_pairs_and_move,
-    render_pose_condition_map,
+    render_pose_condition_map, gather_candidate_poses,
 )
 from parse_rover_pose import RoverPose
 from dtm_coverage import DtmCoverageRecord
@@ -444,6 +444,42 @@ def test_process_dtm_group_tags_manifest_rows_with_source_mission(
     result2 = process_dtm_group(dtm_record, poses, scratch_dir, out_dir,
                                 source_mission="M20")
     assert result2["source_mission"] == "M20"
+
+
+def test_gather_candidate_poses_dedupes_across_sols(monkeypatch):
+    """Pulled out of main() so render_pitch_bucket_samples.py (Task 3) can
+    reuse the exact same pose-gathering logic instead of duplicating it."""
+    def fake_list_products(sol):
+        return [f"P{sol}_1", f"P{sol}_2", f"P{sol}_3"]
+
+    def fake_fetch_and_parse(product_id, sol, localization):
+        return _make_pose(product_id, lat=-4.5, lon=137.5)
+
+    monkeypatch.setattr("assemble_paired_corpus.list_navcam_products_for_sol",
+                        fake_list_products)
+    monkeypatch.setattr("assemble_paired_corpus.fetch_and_parse_pose",
+                        fake_fetch_and_parse)
+
+    poses = gather_candidate_poses(sols=[10, 20], per_sol=2, localization={})
+
+    assert len(poses) == 4  # 2 sols x per_sol=2, capped correctly
+    assert {p.product_id for p in poses} == {"P10_1", "P10_2", "P20_1", "P20_2"}
+
+
+def test_gather_candidate_poses_skips_sol_on_listing_error(monkeypatch):
+    def fake_list_products(sol):
+        if sol == 20:
+            raise Exception("network error")
+        return [f"P{sol}_1"]
+
+    monkeypatch.setattr("assemble_paired_corpus.list_navcam_products_for_sol",
+                        fake_list_products)
+    monkeypatch.setattr("assemble_paired_corpus.fetch_and_parse_pose",
+                        lambda product_id, sol, localization: _make_pose(product_id, -4.5, 137.5))
+
+    poses = gather_candidate_poses(sols=[10, 20], per_sol=1, localization={})
+
+    assert {p.product_id for p in poses} == {"P10_1"}
 
 
 def test_render_pose_condition_map_returns_none_when_pixel_out_of_bounds(
