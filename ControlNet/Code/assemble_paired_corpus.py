@@ -181,7 +181,15 @@ def split_pairs_and_move(product_ids: list[str], staging_dir: Path,
                          out_dir: Path, seed: int = 0,
                          train_frac: float = 0.8, val_frac: float = 0.1) -> dict:
     """Shuffle product_ids and move each pair's condition+target files
-    together into the same train/val/test split subdir under out_dir."""
+    together into the same train/val/test split subdir under out_dir.
+
+    Clears each split subdir before writing into it: a re-run against a
+    different total product_ids count reshuffles which product IDs land
+    in which split, so leaving a prior run's files in place would let old
+    and new pairs silently mix (or the same ID sit stale in a split this
+    run didn't put it in). Task 8's implementer hit exactly this and
+    manually deleted stale files before running -- this makes re-running
+    safe by default instead of relying on that being remembered."""
     ids = list(product_ids)
     random.Random(seed).shuffle(ids)
     n = len(ids)
@@ -194,6 +202,8 @@ def split_pairs_and_move(product_ids: list[str], staging_dir: Path,
     }
     for split_name, split_ids in splits.items():
         split_dir = out_dir / split_name
+        if split_dir.exists():
+            shutil.rmtree(split_dir)
         split_dir.mkdir(parents=True, exist_ok=True)
         for pid in split_ids:
             shutil.move(str(staging_dir / f"{pid}_condition.png"),
@@ -233,7 +243,12 @@ def query_region_dtm_coverage(region_key: str) -> list[DtmCoverageRecord]:
     return query_dtm_coverage(cfg["lat_min"], cfg["lat_max"], west, east)
 
 
-def main():
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Separated from main() so tests exercise the real, fully-configured
+    parser (choices, defaults, help text) instead of a hand-typed copy
+    that could silently drift from what main() actually runs — e.g. the
+    --region choices excluding oxia_planum, which a regression test needs
+    to check against the genuine parser to mean anything."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--sols", type=int, nargs="+",
                         default=list(range(1, 4700, 50)),
@@ -247,6 +262,32 @@ def main():
     parser.add_argument("--region", type=str, default="gale_crater",
                         choices=[k for k in REGIONS if k != "oxia_planum"],
                         help="REGIONS key to query DTM coverage for")
+    return parser
+
+
+def write_manifest(manifest: list[dict], saved_ids: list[str],
+                   manifest_path: Path) -> bool:
+    """Write manifest rows (including the spec's source_mission provenance
+    column) to manifest_path — unless saved_ids is empty, in which case
+    warn and skip the write entirely rather than overwriting a non-empty
+    tracked manifest.csv with a bare-header file (e.g. --region
+    jezero_crater currently has no working pose-fetch path and produces 0
+    pairs). Returns True if the manifest was written, False if skipped."""
+    if len(saved_ids) == 0:
+        print(f"WARNING: 0 pairs produced — check region/sols/pitch settings; "
+             f"NOT overwriting {manifest_path}")
+        return False
+    with open(manifest_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["dtm_product_id", "status", "pairs_saved", "source_mission"])
+        for row in manifest:
+            writer.writerow([row["product_id"], row["status"], row.get("pairs_saved", 0),
+                             row.get("source_mission", "MSL")])
+    return True
+
+
+def main():
+    parser = build_arg_parser()
     args = parser.parse_args()
 
     root = Path(__file__).parent.parent
@@ -289,12 +330,8 @@ def main():
     print(f"\nFinal split: {split_counts}")
 
     manifest_path = out_dir / "manifest.csv"
-    with open(manifest_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["dtm_product_id", "status", "pairs_saved"])
-        for row in manifest:
-            writer.writerow([row["product_id"], row["status"], row.get("pairs_saved", 0)])
-    print(f"Manifest written to {manifest_path}")
+    if write_manifest(manifest, saved_ids, manifest_path):
+        print(f"Manifest written to {manifest_path}")
 
 
 if __name__ == "__main__":

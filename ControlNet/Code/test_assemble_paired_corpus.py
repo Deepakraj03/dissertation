@@ -1,4 +1,5 @@
 # test_assemble_paired_corpus.py
+import csv
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -8,6 +9,7 @@ import rasterio
 from assemble_paired_corpus import (
     group_products_by_covering_dtm, process_dtm_group, split_pairs_and_move,
     render_pose_condition_map, gather_candidate_poses, query_region_dtm_coverage,
+    build_arg_parser, write_manifest,
 )
 from parse_rover_pose import RoverPose
 from dtm_coverage import DtmCoverageRecord
@@ -539,14 +541,15 @@ def test_region_cli_flag_excludes_oxia_planum():
     exist there. This pipeline requires paired condition maps + real photos,
     so oxia_planum must never be a valid --region choice even though it
     exists in the REGIONS dict (which is used elsewhere). Regression test
-    to prevent accidental inclusion of oxia_planum in region iterations."""
-    import argparse
-    from assemble_paired_corpus import REGIONS
+    to prevent accidental inclusion of oxia_planum in region iterations.
 
-    parser = argparse.ArgumentParser()
-    # Replicate the actual choices from main() -- must exclude oxia_planum
-    parser.add_argument("--region", type=str, default="gale_crater",
-                        choices=[k for k in REGIONS if k != "oxia_planum"])
+    Exercises main()'s real parser via build_arg_parser() (not a re-typed
+    inline copy of its choices=[...]) so this test actually fails if
+    main()'s --region argument is ever reverted to
+    choices=list(REGIONS.keys()) -- an earlier version of this test built
+    its own ArgumentParser and provided zero protection against exactly
+    that regression."""
+    parser = build_arg_parser()
 
     # Valid regions should parse successfully
     args_gale = parser.parse_args(["--region", "gale_crater"])
@@ -558,3 +561,101 @@ def test_region_cli_flag_excludes_oxia_planum():
     # oxia_planum must be rejected
     with pytest.raises(SystemExit):
         parser.parse_args(["--region", "oxia_planum"])
+
+
+def test_build_arg_parser_default_region_is_gale_crater():
+    """Sanity check on build_arg_parser()'s defaults, since main() now
+    depends on it entirely for argument definitions."""
+    parser = build_arg_parser()
+    args = parser.parse_args([])
+    assert args.region == "gale_crater"
+
+
+def test_write_manifest_includes_source_mission_column(tmp_path):
+    """Spec's Output format section requires a source_mission column on
+    the manifest (existing Gale rows tagged MSL). process_dtm_group
+    already threads source_mission through its return dict (Task 1) --
+    this closes the gap where main()'s manifest writer used to hardcode
+    a 3-column header and silently drop the key."""
+    manifest = [
+        {"product_id": "DTM_A", "status": "ok", "pairs_saved": 3,
+         "saved_ids": ["P1", "P2", "P3"], "source_mission": "MSL"},
+        {"product_id": "DTM_B", "status": "ok", "pairs_saved": 0,
+         "saved_ids": [], "source_mission": "M20"},
+    ]
+    manifest_path = tmp_path / "manifest.csv"
+
+    written = write_manifest(manifest, saved_ids=["P1", "P2", "P3"],
+                             manifest_path=manifest_path)
+
+    assert written is True
+    rows = list(csv.reader(manifest_path.open()))
+    assert rows[0] == ["dtm_product_id", "status", "pairs_saved", "source_mission"]
+    assert rows[1] == ["DTM_A", "ok", "3", "MSL"]
+    assert rows[2] == ["DTM_B", "ok", "0", "M20"]
+
+
+def test_write_manifest_defaults_missing_source_mission_to_msl(tmp_path):
+    """A manifest row dict missing the source_mission key entirely (e.g.
+    hand-constructed, or from an older code path) still writes a valid
+    row rather than raising a KeyError."""
+    manifest = [{"product_id": "DTM_A", "status": "ok", "pairs_saved": 1}]
+    manifest_path = tmp_path / "manifest.csv"
+
+    write_manifest(manifest, saved_ids=["P1"], manifest_path=manifest_path)
+
+    rows = list(csv.reader(manifest_path.open()))
+    assert rows[1] == ["DTM_A", "ok", "1", "MSL"]
+
+
+def test_write_manifest_skips_when_zero_pairs_saved(tmp_path, capsys):
+    """--region jezero_crater currently has no working pose-fetch path and
+    a bounding box disjoint from the MSL-only pose gatherer's Gale poses --
+    running with it produces 0 DTM groups, 0 pairs, and previously silently
+    overwrote the git-tracked manifest.csv with a bare-header file. Guard:
+    when saved_ids is empty, warn and skip the write entirely rather than
+    clobbering a non-empty tracked manifest with an empty one."""
+    manifest_path = tmp_path / "manifest.csv"
+    manifest_path.write_text("dtm_product_id,status,pairs_saved,source_mission\n"
+                             "DTM_OLD,ok,5,MSL\n")
+
+    written = write_manifest(
+        [{"product_id": "DTM_A", "status": "ok", "pairs_saved": 0,
+          "source_mission": "MSL"}],
+        saved_ids=[], manifest_path=manifest_path,
+    )
+
+    assert written is False
+    # Pre-existing non-empty manifest is untouched, not overwritten.
+    assert "DTM_OLD" in manifest_path.read_text()
+    assert "WARNING" in capsys.readouterr().out
+
+
+def test_split_pairs_and_move_clears_stale_files_from_a_previous_run(tmp_path):
+    """A re-run against a different total n (e.g. after --region or widened
+    sampling changes candidate counts) must not leave a previous run's
+    files mixed into train/val/test — split_pairs_and_move used to only
+    ever mkdir+move (add), never clear, so a stale product ID from a prior
+    run could sit in a different split than this run's shuffle would put
+    it, or simply linger as an orphan alongside the new pairs. This is the
+    exact hazard Task 8's implementer hit and had to manually work around."""
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    out_dir = tmp_path / "out"
+
+    # Simulate a stale previous run's leftovers already sitting in train/.
+    stale_dir = out_dir / "train"
+    stale_dir.mkdir(parents=True)
+    (stale_dir / "STALE_condition.png").write_bytes(b"old")
+    (stale_dir / "STALE_target.jpg").write_bytes(b"old")
+
+    for pid in ["P1", "P2", "P3", "P4"]:
+        (staging / f"{pid}_condition.png").write_bytes(b"c")
+        (staging / f"{pid}_target.jpg").write_bytes(b"t")
+
+    split_pairs_and_move(["P1", "P2", "P3", "P4"], staging, out_dir, seed=0)
+
+    all_condition_files = {p.name for split in ["train", "val", "test"]
+                           for p in (out_dir / split).glob("*_condition.png")}
+    assert "STALE_condition.png" not in all_condition_files
+    assert len(all_condition_files) == 4
