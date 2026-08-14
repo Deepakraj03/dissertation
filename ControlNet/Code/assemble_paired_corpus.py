@@ -47,6 +47,23 @@ NAVCAM_JPG_BASE = "https://planetarydata.jpl.nasa.gov/img/data/msl/msl_navcam_ra
 # exposed this passed entropy). Most real Navcam full-frame poses are
 # steeper than this (median real elevation ~-38 deg, see the 2026-08-09
 # candidate survey), so this trades corpus yield for per-pair fidelity.
+#
+# Recalibrated 2026-08-13 against real Gale Crater samples (see
+# render_pitch_bucket_samples.py, 2026-08-13-multi-site-data-expansion.md
+# Task 4): the 2026-08-09 shelf artifact was checked in three wider pitch
+# buckets and was found in 5/5 20-25deg samples, 5/5 25-35deg samples, and
+# 5/5 35-50deg samples (full landed totals agree: 6/6, 5/5, 8/8) -- every
+# inspected condition map showed either the same blocky low-detail "shelf"
+# as the real photo's near-field texture, or, in several 20-25deg and most
+# 35-50deg cases, a complete black-frame render (render_ground_view's
+# per-column ray march hits a NaN albedo sample on its first in-bounds
+# step at these steeper elevation angles and aborts the column before
+# drawing anything -- an even more severe version of the same DTM/ortho
+# coverage-limited failure, not a separate bug specific to this tool).
+# Since the shelf/failure pattern was in the MAJORITY (not the minority)
+# of every bucket checked, including the bucket immediately past the
+# existing cutoff, there is no wider threshold the 2026-08-09 tradeoff
+# rationale supports -- MAX_ABS_PITCH_DEG stays at 20.0.
 MAX_ABS_PITCH_DEG = 20.0
 
 
