@@ -3,3 +3,4 @@ numpy>=2.0
 tensorboard>=2.18
 pyproj>=3.0
 scikit-image>=0.25
+rasterio>=1.3
