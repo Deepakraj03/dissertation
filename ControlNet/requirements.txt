@@ -12,3 +12,4 @@ scikit-image>=0.25
 # ControlNet/Code/ imports shared HiRISE/DTM infrastructure from
 # CycleGAN/Code/ rather than duplicating it -- install both in the same
 # environment.
+peft>=0.20
