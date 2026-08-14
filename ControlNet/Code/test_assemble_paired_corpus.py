@@ -7,7 +7,7 @@ import rasterio
 
 from assemble_paired_corpus import (
     group_products_by_covering_dtm, process_dtm_group, split_pairs_and_move,
-    render_pose_condition_map, gather_candidate_poses,
+    render_pose_condition_map, gather_candidate_poses, query_region_dtm_coverage,
 )
 from parse_rover_pose import RoverPose
 from dtm_coverage import DtmCoverageRecord
@@ -510,3 +510,25 @@ def test_render_pose_condition_map_renders_when_in_bounds(tmp_path, monkeypatch)
                                        transform=None, pose=pose)
     assert result is not None
     assert result.shape == (256, 256)
+
+
+def test_query_region_dtm_coverage_converts_longitude_and_queries(monkeypatch):
+    """Uses REGIONS[region_key]'s signed lon bounds, converts to the ODE
+    API's 0-360 convention (query_dtm_coverage's own requirement), and
+    returns whatever it returns -- this function is a thin, testable
+    wrapper so main() can be driven by --region instead of a hardcoded key."""
+    captured = {}
+
+    def fake_query(lat_min, lat_max, west, east):
+        captured["args"] = (lat_min, lat_max, west, east)
+        return ["fake_record"]
+
+    monkeypatch.setattr("assemble_paired_corpus.query_dtm_coverage", fake_query)
+
+    result = query_region_dtm_coverage("gale_crater")
+
+    assert result == ["fake_record"]
+    lat_min, lat_max, west, east = captured["args"]
+    assert (lat_min, lat_max) == (-8.0, -3.0)
+    assert west == pytest.approx(135.0)  # already 0-360, no wraparound needed
+    assert east == pytest.approx(140.0)

@@ -223,6 +223,16 @@ def gather_candidate_poses(sols: list[int], per_sol: int,
     return poses
 
 
+def query_region_dtm_coverage(region_key: str) -> list[DtmCoverageRecord]:
+    """REGIONS[region_key]'s bounding box, queried for real HiRISE stereo
+    DTM coverage. Thin wrapper so main() is driven by --region instead of
+    the previously hardcoded 'gale_crater' key."""
+    cfg = REGIONS[region_key]
+    west = signed_lon_to_0_360(cfg["lon_min"])
+    east = signed_lon_to_0_360(cfg["lon_max"])
+    return query_dtm_coverage(cfg["lat_min"], cfg["lat_max"], west, east)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sols", type=int, nargs="+",
@@ -232,17 +242,17 @@ def main():
     parser.add_argument("--max-pitch-deg", type=float, default=MAX_ABS_PITCH_DEG,
                         help="Max abs(pitch_deg) for a pose to be rendered "
                              "(see MAX_ABS_PITCH_DEG's module comment)")
+    parser.add_argument("--region", type=str, default="gale_crater",
+                        choices=list(REGIONS.keys()),
+                        help="REGIONS key to query DTM coverage for")
     args = parser.parse_args()
 
     root = Path(__file__).parent.parent
     index_dir = root / "Data" / "HiRISE_index"
     index_dir.mkdir(parents=True, exist_ok=True)
 
-    cfg = REGIONS["gale_crater"]
-    west = signed_lon_to_0_360(cfg["lon_min"])
-    east = signed_lon_to_0_360(cfg["lon_max"])
-    print("Querying Gale Crater DTM coverage…")
-    dtm_records = query_dtm_coverage(cfg["lat_min"], cfg["lat_max"], west, east)
+    print(f"Querying {args.region} DTM coverage…")
+    dtm_records = query_region_dtm_coverage(args.region)
     print(f"Found {len(dtm_records)} DTM product(s)")
 
     csv_path = index_dir / "localized_interp.csv"
