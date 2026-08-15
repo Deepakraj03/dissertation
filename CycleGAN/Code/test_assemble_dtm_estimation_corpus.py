@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from assemble_dtm_estimation_corpus import (
-    augment_patch_pair, process_dtm_product_for_estimation,
-    split_patches_by_product,
+    append_manifest_row, augment_patch_pair, load_completed_product_ids,
+    process_dtm_product_for_estimation, select_shard, split_patches_by_product,
 )
 from dtm_arrays import DtmArrays
 from dtm_coverage import DtmCoverageRecord
@@ -183,3 +183,71 @@ def test_split_patches_by_product_no_product_appears_in_two_splits(tmp_path):
             pid = f.name.split("_p")[0]
             assert pid not in seen_in, f"{pid} appeared in both {seen_in.get(pid)} and {split}"
             seen_in[pid] = split
+
+
+def test_select_shard_partitions_without_overlap_or_gaps():
+    records = [f"R{i}" for i in range(23)]
+    num_shards = 4
+
+    shards = [select_shard(records, i, num_shards) for i in range(num_shards)]
+
+    reconstructed = sorted(r for shard in shards for r in shard)
+    assert reconstructed == sorted(records)  # every record appears exactly once
+    # Interleaved (round-robin) assignment keeps shard sizes balanced --
+    # no shard should be starved just because 23 doesn't divide evenly by 4.
+    sizes = [len(s) for s in shards]
+    assert max(sizes) - min(sizes) <= 1
+
+
+def test_select_shard_single_shard_returns_everything():
+    records = [f"R{i}" for i in range(10)]
+    assert select_shard(records, 0, 1) == records
+
+
+def test_load_completed_product_ids_empty_when_manifest_missing(tmp_path):
+    assert load_completed_product_ids(tmp_path / "does_not_exist.csv") == set()
+
+
+def test_load_completed_product_ids_reads_real_written_rows(tmp_path):
+    manifest_path = tmp_path / "manifest.csv"
+    append_manifest_row(manifest_path,
+                        {"product_id": "A", "status": "ok",
+                         "patches_saved": 4, "roughness": 0.1})
+    append_manifest_row(manifest_path,
+                        {"product_id": "B", "status": "dtm_download_failed",
+                         "patches_saved": 0, "roughness": None})
+
+    assert load_completed_product_ids(manifest_path) == {"A", "B"}
+
+
+def test_append_manifest_row_writes_header_only_once(tmp_path):
+    manifest_path = tmp_path / "manifest.csv"
+    append_manifest_row(manifest_path,
+                        {"product_id": "A", "status": "ok",
+                         "patches_saved": 4, "roughness": 0.1})
+    append_manifest_row(manifest_path,
+                        {"product_id": "B", "status": "ok",
+                         "patches_saved": 2, "roughness": 0.2})
+
+    lines = manifest_path.read_text().splitlines()
+    assert lines[0] == "product_id,status,patches_saved,roughness"
+    assert len(lines) == 3  # header + 2 data rows, no duplicate headers
+
+
+def test_append_manifest_row_survives_across_two_separate_calls_simulating_resume(tmp_path):
+    # Simulates a killed-and-restarted run: first "session" writes one row,
+    # then a fresh call (as a resumed process would make) appends another --
+    # the header must not be duplicated and both rows must be readable.
+    manifest_path = tmp_path / "manifest.csv"
+    append_manifest_row(manifest_path,
+                        {"product_id": "A", "status": "ok",
+                         "patches_saved": 4, "roughness": 0.1})
+
+    # "Restart": a fresh process re-opens the same path and appends more.
+    append_manifest_row(manifest_path,
+                        {"product_id": "C", "status": "ok",
+                         "patches_saved": 9, "roughness": 0.3})
+
+    assert load_completed_product_ids(manifest_path) == {"A", "C"}
+    lines = manifest_path.read_text().splitlines()
+    assert lines.count("product_id,status,patches_saved,roughness") == 1

@@ -85,6 +85,44 @@ def process_dtm_product_for_estimation(record: DtmCoverageRecord, scratch_dir: P
             Path(p).unlink(missing_ok=True)
 
 
+def select_shard(records: list, shard_index: int, num_shards: int) -> list:
+    """Round-robin (interleaved) partition of records across num_shards --
+    every record appears in exactly one shard, and shard sizes never
+    differ by more than one even when the count doesn't divide evenly.
+    Used to split the global catalog across parallel SLURM array tasks;
+    a contiguous chunking would work too, but interleaving means a shard
+    isn't accidentally starved if the catalog happens to have a productive
+    run of products clustered together."""
+    return records[shard_index::num_shards]
+
+
+def load_completed_product_ids(manifest_path: Path) -> set[str]:
+    """Real product IDs already recorded in an existing manifest CSV --
+    used to skip re-processing them on a resumed/restarted run, since a
+    killed job would otherwise redo already-fetched work from scratch."""
+    if not manifest_path.exists():
+        return set()
+    with open(manifest_path, newline="") as f:
+        return {row["product_id"] for row in csv.DictReader(f)}
+
+
+def append_manifest_row(manifest_path: Path, row: dict) -> None:
+    """Append one product's result to the manifest CSV immediately after
+    it's processed, so partial progress survives an interrupted run --
+    rather than only writing the whole manifest at the very end, which
+    loses everything if the job is killed partway (the 2026-08-14 smoke
+    test's real ~7-day full-catalog extrapolation makes this a real risk,
+    not a hypothetical one)."""
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not manifest_path.exists()
+    with open(manifest_path, "a", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["product_id", "status", "patches_saved", "roughness"])
+        if write_header:
+            writer.writeheader()
+        writer.writerow(row)
+
+
 def split_patches_by_product(product_ids: list[str], staging_dir: Path,
                              out_dir: Path, seed: int = 0,
                              train_frac: float = 0.8, val_frac: float = 0.1,
@@ -125,7 +163,12 @@ def main():
     parser.add_argument("--alignment-th", type=float, default=0.4)
     parser.add_argument("--band-deg", type=float, default=10.0)
     parser.add_argument("--limit", type=int, default=None,
-                        help="Process at most this many DTM products (smoke testing)")
+                        help="Consider at most this many DTM products globally,"
+                             " before sharding (smoke testing)")
+    parser.add_argument("--shard-index", type=int, default=0,
+                        help="This task's shard, for parallel SLURM array runs")
+    parser.add_argument("--num-shards", type=int, default=1,
+                        help="Total shards the catalog is split across")
     parser.add_argument("--out-root", type=str, default=None,
                         help="Root directory for Data/ output (default: this repo's"
                              " CycleGAN/ directory). Override to a fast scratch"
@@ -141,14 +184,22 @@ def main():
     if args.limit:
         records = records[:args.limit]
         print(f"Limited to {len(records)} product(s) for this run")
+    records = select_shard(records, args.shard_index, args.num_shards)
+    print(f"Shard {args.shard_index}/{args.num_shards}: {len(records)} product(s) assigned")
 
-    scratch_dir = root / "Data" / "_dtm_estimation_scratch"
+    scratch_dir = root / "Data" / "_dtm_estimation_scratch" / f"shard{args.shard_index}"
     staging_dir = root / "Data" / "processed" / "dtm_estimation_corpus" / "_staging"
     out_dir = root / "Data" / "processed" / "dtm_estimation_corpus"
+    manifest_path = out_dir / f"manifest_shard{args.shard_index}of{args.num_shards}.csv"
 
-    manifest = []
-    products_with_patches = []
+    already_done = load_completed_product_ids(manifest_path)
+    if already_done:
+        print(f"Resuming: {len(already_done)} product(s) already in this shard's"
+             f" manifest, skipping them")
+
     for record in records:
+        if record.product_id in already_done:
+            continue
         print(f"Processing {record.product_id}…")
         result = process_dtm_product_for_estimation(
             record, scratch_dir, staging_dir,
@@ -157,22 +208,11 @@ def main():
         )
         print(f"  {result['status']} — {result.get('patches_saved', 0)} patches"
              f" (roughness={result.get('roughness')})")
-        manifest.append(result)
-        if result.get("patches_saved", 0) > 0:
-            products_with_patches.append(record.product_id)
+        append_manifest_row(manifest_path, result)
 
-    split_counts = split_patches_by_product(products_with_patches, staging_dir, out_dir)
-    print(f"\nFinal split: {split_counts}")
-
-    manifest_path = out_dir / "manifest.csv"
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(manifest_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["product_id", "status", "patches_saved", "roughness"])
-        for row in manifest:
-            writer.writerow([row["product_id"], row["status"],
-                             row.get("patches_saved", 0), row.get("roughness")])
-    print(f"Manifest written to {manifest_path}")
+    print(f"\nShard {args.shard_index}/{args.num_shards} finished. Manifest at {manifest_path}")
+    print("Run finalize_dtm_estimation_corpus.py once every shard has finished"
+         " to merge manifests and build the train/val/test split.")
 
 
 if __name__ == "__main__":
