@@ -8,6 +8,7 @@ from train_dtm_estimator import (
     DtmEstimationDataset,
     build_lora_config,
     compute_x0_estimate,
+    find_latest_checkpoint,
     height_regression_loss,
     timestep_weight,
 )
@@ -89,6 +90,32 @@ def test_dtm_estimation_dataset_loads_real_condition_target_pairs(tmp_path):
     assert item["target_pixel_values"].max() <= 1.0
     assert item["height_min"] == pytest.approx(float(height.min()))
     assert item["height_max"] == pytest.approx(float(height.max()))
+
+
+def test_find_latest_checkpoint_picks_highest_step(tmp_path):
+    (tmp_path / "checkpoint-500").mkdir()
+    (tmp_path / "checkpoint-2000").mkdir()
+    (tmp_path / "checkpoint-1000").mkdir()
+
+    result = find_latest_checkpoint(tmp_path)
+
+    assert result == (tmp_path / "checkpoint-2000", 2000)
+
+
+def test_find_latest_checkpoint_returns_none_when_no_checkpoints_exist(tmp_path):
+    assert find_latest_checkpoint(tmp_path) is None
+    assert find_latest_checkpoint(tmp_path / "does_not_exist") is None
+
+
+def test_find_latest_checkpoint_ignores_non_checkpoint_entries(tmp_path):
+    (tmp_path / "checkpoint-1000").mkdir()
+    (tmp_path / "final").mkdir()
+    (tmp_path / "checkpoint-not-a-number").mkdir()
+    (tmp_path / "checkpoint-1000.tmp").touch()
+
+    result = find_latest_checkpoint(tmp_path)
+
+    assert result == (tmp_path / "checkpoint-1000", 1000)
 
 
 def test_dtm_estimation_dataset_only_pairs_matching_condition_and_target(tmp_path):

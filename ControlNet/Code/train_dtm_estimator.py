@@ -147,6 +147,25 @@ def height_regression_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Te
     return F.l1_loss(pred, target, reduction="none").mean(dim=[1, 2, 3])
 
 
+def find_latest_checkpoint(output_dir: Path) -> tuple[Path, int] | None:
+    """Highest-step checkpoint-<N> directory under output_dir, or None if
+    none exist -- lets a resumed run recover from real SLURM interruptions
+    (timeouts, node failures, the home-quota exhaustion that killed the
+    first real training attempt) without losing completed steps."""
+    output_dir = Path(output_dir)
+    candidates = []
+    if output_dir.is_dir():
+        for entry in output_dir.iterdir():
+            if entry.is_dir() and entry.name.startswith("checkpoint-"):
+                suffix = entry.name.removeprefix("checkpoint-")
+                if suffix.isdigit():
+                    candidates.append((int(suffix), entry))
+    if not candidates:
+        return None
+    step, path = max(candidates, key=lambda pair: pair[0])
+    return path, step
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pretrained_model_name_or_path", type=str,
@@ -170,6 +189,10 @@ def parse_args():
                         choices=["no", "fp16", "bf16"])
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--dataloader_num_workers", type=int, default=2)
+    parser.add_argument("--resume_from_checkpoint", type=str, default=None,
+                        help="Path to a checkpoint-<N> directory to resume"
+                             " from, or 'latest' to auto-find the"
+                             " highest-step checkpoint under output_dir")
     return parser.parse_args()
 
 
@@ -230,6 +253,19 @@ def main():
     num_train_timesteps = noise_scheduler.config.num_train_timesteps
     global_step = 0
     progress_target = args.max_train_steps
+
+    if args.resume_from_checkpoint:
+        if args.resume_from_checkpoint == "latest":
+            found = find_latest_checkpoint(Path(args.output_dir))
+            if found is None:
+                raise ValueError(
+                    f"--resume_from_checkpoint=latest but no checkpoint-<N>"
+                    f" directory exists under {args.output_dir}")
+            resume_path, global_step = found
+        else:
+            resume_path = Path(args.resume_from_checkpoint)
+            global_step = int(resume_path.name.removeprefix("checkpoint-"))
+        accelerator.load_state(str(resume_path))
 
     while global_step < progress_target:
         for batch in train_dataloader:
