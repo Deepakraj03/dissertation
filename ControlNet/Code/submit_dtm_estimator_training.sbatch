@@ -20,7 +20,7 @@
 
 set -euo pipefail
 
-mkdir -p /users/dr00846/Dissertation/CycleGAN/logs
+mkdir -p /users/dr00846/Dissertation/ControlNet/logs
 
 module load CUDA/12.2.2
 
