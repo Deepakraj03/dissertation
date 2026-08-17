@@ -35,11 +35,10 @@ export HF_HOME=/parallel_scratch/dr00846/hf_cache
 
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
 
-# NOT YET RUN END-TO-END: train_dtm_estimator.py's core math (x0-estimate,
-# height-regression loss, dataset loading, LoRA config) is unit-tested on
-# CPU against real torch/diffusers/peft, but the full accelerate training
-# loop has never executed against real GPU hardware or the real
-# pretrained SD1.5 weights -- this is the first real run.
+# Real run on Eureka2 (job 748677) reached checkpoint-2000 before dying
+# when the home-dir NFS quota filled mid-write -- checkpoints now live on
+# /parallel_scratch (symlinked in), and --resume_from_checkpoint=latest
+# picks up wherever the last complete checkpoint left off.
 accelerate launch train_dtm_estimator.py \
   --pretrained_model_name_or_path="stable-diffusion-v1-5/stable-diffusion-v1-5" \
   --controlnet_model_name_or_path="lllyasviel/sd-controlnet-depth" \
@@ -54,4 +53,5 @@ accelerate launch train_dtm_estimator.py \
   --lora_rank=16 \
   --lora_alpha=16 \
   --mixed_precision=bf16 \
-  --seed=42
+  --seed=42 \
+  --resume_from_checkpoint=latest
