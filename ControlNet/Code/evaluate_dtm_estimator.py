@@ -47,6 +47,21 @@ def compute_rmse(estimated: np.ndarray, real: np.ndarray) -> float:
     return float(np.sqrt(np.mean(diff ** 2)))
 
 
+def find_gale_orig_patch_pairs(test_dir, product_id: str) -> list:
+    """Real, non-augmented ('orig') test patches for one product -- the
+    hflip/vflip/hvflip siblings assemble_dtm_estimation_corpus.py writes
+    are training-time augmentation, not independent real evaluation
+    signal, so they're excluded here to keep the reported RMSE honest."""
+    test_dir = Path(test_dir)
+    pairs = []
+    for condition_path in sorted(test_dir.glob(f"{product_id}_p*_orig_condition.png")):
+        base = condition_path.name.removesuffix("_condition.png")
+        target_path = test_dir / f"{base}_target.npy"
+        if target_path.exists():
+            pairs.append((condition_path, target_path))
+    return pairs
+
+
 def load_trained_pipeline(base_model: str, controlnet_checkpoint_dir: str,
                           unet_lora_checkpoint_dir: str, device: str = "cuda",
                           ) -> StableDiffusionControlNetPipeline:
@@ -83,30 +98,44 @@ def main():
                         default="stable-diffusion-v1-5/stable-diffusion-v1-5")
     parser.add_argument("--controlnet-checkpoint", type=str, required=True)
     parser.add_argument("--unet-lora-checkpoint", type=str, required=True)
-    parser.add_argument("--gale-ortho", type=str, required=True,
-                        help="Real Gale HiRISE orthoimage patch to run inference on")
-    parser.add_argument("--gale-real-dtm", type=str, required=True,
-                        help="Real stereo DTM .npy patch (same footprint as --gale-ortho)"
-                             " to compare against")
+    parser.add_argument("--test-dir", type=str, required=True,
+                        help="Corpus test/ split directory containing real"
+                             " held-out Gale patches")
+    parser.add_argument("--gale-product-id", type=str,
+                        default=DEFAULT_GALE_DTM_PRODUCT_ID)
     parser.add_argument("--device", type=str, default="cuda")
     args = parser.parse_args()
+
+    pairs = find_gale_orig_patch_pairs(args.test_dir, args.gale_product_id)
+    if not pairs:
+        raise ValueError(
+            f"No real 'orig' test patches found for product"
+            f" {args.gale_product_id} under {args.test_dir}")
 
     pipeline = load_trained_pipeline(
         args.base_model, args.controlnet_checkpoint, args.unet_lora_checkpoint,
         device=args.device,
     )
 
-    ortho_image = Image.open(args.gale_ortho).convert("L")
-    real_height = np.load(args.gale_real_dtm)
+    rmses = []
+    for condition_path, target_path in pairs:
+        ortho_image = Image.open(condition_path).convert("L")
+        real_height = np.load(target_path)
 
-    estimated_unit_range = run_inference(pipeline, ortho_image)
-    valid_real = real_height[~np.isnan(real_height)]
-    reference_meta = {"min": float(valid_real.min()), "max": float(valid_real.max())}
-    estimated_height = decode_height_from_unit_range(estimated_unit_range, reference_meta)
+        estimated_unit_range = run_inference(pipeline, ortho_image)
+        valid_real = real_height[~np.isnan(real_height)]
+        reference_meta = {"min": float(valid_real.min()), "max": float(valid_real.max())}
+        estimated_height = decode_height_from_unit_range(estimated_unit_range, reference_meta)
 
-    rmse = compute_rmse(estimated_height, real_height)
-    print(f"RMSE vs. real Gale stereo DTM: {rmse:.4f} m "
-         f"(paper's own reference: ~1.0545 m on its held-out global test set)")
+        rmse = compute_rmse(estimated_height, real_height)
+        rmses.append(rmse)
+        print(f"{condition_path.name}: RMSE = {rmse:.4f} m")
+
+    rmses = np.array(rmses)
+    print(f"\n{len(rmses)} real held-out Gale patches (product {args.gale_product_id})")
+    print(f"Mean RMSE: {rmses.mean():.4f} m  (std: {rmses.std():.4f} m)")
+    print("Paper's own reference (rs13214220): ~1.0545 m on its held-out"
+         " global test set")
 
 
 if __name__ == "__main__":
