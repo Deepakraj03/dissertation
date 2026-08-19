@@ -49,10 +49,16 @@ ControlNet/Data/processed/paired_controlnet_corpus/*
 ControlNet/Data/eval/*
 !ControlNet/Data/eval/mars_model_eval.json
 !ControlNet/Data/eval/fid_results_controlnet.json
+!ControlNet/Data/eval/dtm_estimator_eval.json
 !ControlNet/Data/HiRISE_index/
 ControlNet/Data/HiRISE_index/*
 !ControlNet/Data/HiRISE_index/controlnet_phase1_feasibility_report.json
 !ControlNet/Data/HiRISE_index/jezero_archive_discovery_report.json
+
+# DTM estimator qualitative output (small PNGs, same "visual training
+# record" precedent as CycleGAN/samples/ below) -- ARE tracked.
+!ControlNet/Data/dtm_estimator_visualizations/
+!ControlNet/Data/dtm_estimator_spotcheck_output/
 
 # Training artifacts (move machine-to-machine via rsync, not git) --
 # the ControlNet checkpoint is ~1.4GB, well past what git should hold.

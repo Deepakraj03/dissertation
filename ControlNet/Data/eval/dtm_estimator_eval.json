@@ -1,0 +1,10 @@
+{
+  "mean_rmse_m": 2.0171,
+  "std_rmse_m": 0.8323,
+  "n_patches": 21,
+  "gale_product_id": "DTEEC_040770_1755_039280_1755_A01",
+  "checkpoint": "dtm_estimator_converted (checkpoint-20000/final, converted)",
+  "reference_paper_rmse_m": 1.0545,
+  "reference_paper": "rs13214220",
+  "timestamp": "2026-08-19T16:16:25.895962+00:00"
+}
