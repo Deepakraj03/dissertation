@@ -59,6 +59,13 @@ ControlNet/Data/HiRISE_index/*
 # record" precedent as CycleGAN/samples/ below) -- ARE tracked.
 !ControlNet/Data/dtm_estimator_visualizations/
 !ControlNet/Data/dtm_estimator_spotcheck_output/
+# End-to-end chain output (HiRISE -> DTM estimator -> render -> Track 3
+# ControlNet) -- same precedent. gale_crop.npz (the fetch cache) is
+# deliberately excluded, regenerate via prepare_e2e_crop.py.
+!ControlNet/Data/e2e_pipeline_output/
+ControlNet/Data/e2e_pipeline_output/*
+!ControlNet/Data/e2e_pipeline_output/*.png
+!ControlNet/Data/e2e_pipeline_output/*.jpg
 
 # Training artifacts (move machine-to-machine via rsync, not git) --
 # the ControlNet checkpoint is ~1.4GB, well past what git should hold.
