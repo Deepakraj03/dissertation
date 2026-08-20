@@ -98,6 +98,13 @@ def main():
                              " NOT camera-matched visual reference")
     parser.add_argument("--out-dir", type=str, required=True)
     parser.add_argument("--patch-size", type=int, default=256)
+    parser.add_argument("--pitch-deg", type=float, default=SPOTCHECK_PITCH_DEG,
+                        help="Synthetic camera pitch for both crude renders"
+                             " (default matches spotcheck_dtm_estimator_render.py's"
+                             " -15deg steep down-look; a shallower value, e.g."
+                             " -5, shows less of the known shelf artifact and"
+                             " is a fairer test of whether the DTM estimator's"
+                             " error visibly propagates to the final image)")
     parser.add_argument("--device", type=str, default="cuda")
     args = parser.parse_args()
 
@@ -141,7 +148,7 @@ def main():
         real_render = render_ground_view(
             real_height_crop, albedo_crop, pixel_scale_m,
             camera_row=camera_row, camera_col=camera_col, heading_deg=0.0,
-            pitch_deg=SPOTCHECK_PITCH_DEG,
+            pitch_deg=args.pitch_deg,
         )
 
         print("Stage 1: running the DTM estimator on the HiRISE ortho patch...")
@@ -162,7 +169,7 @@ def main():
         estimated_render = render_ground_view(
             estimated_height_crop, albedo_crop, pixel_scale_m,
             camera_row=camera_row, camera_col=camera_col, heading_deg=0.0,
-            pitch_deg=SPOTCHECK_PITCH_DEG,
+            pitch_deg=args.pitch_deg,
         )
     finally:
         if dtm_path is not None:
