@@ -1,16 +1,17 @@
-\chapter{CycleGAN Baseline: Training, Evaluation and Diagnosis}
+\chapter{Results: Diagnosis, Redesign, and a Geometry-Mediated Pipeline}
 \label{ch:results}
 
-This chapter reports the results of training the CycleGAN baseline described in Chapter~4 on the corrected, full-resolution HiRISE corpus, evaluates it quantitatively and visually, and presents a specific, evidence-based diagnosis of why it currently falls well short of the target FID --- rather than a general appeal to GAN training instability.
+This chapter reports the CycleGAN baseline's original training run and its diagnosis, then follows the evidence where it led: a deeper corpus-diversity root cause than the resolution bug alone explained, a geometry-mediated redesign built in response (Chapter~4, Section~\ref{sec:geometry-impl}), two further CycleGAN training tracks that isolate the loss-tuning question from the viewpoint-translation question, a single-image DTM estimator, and, finally, the first clean evidence of whether that estimator's error actually matters to the pipeline's output. Nothing here is estimated: every number traces to a committed training log, checkpoint, or evaluation file in the project repository.
 
-\section{Training Run}
+\section{The Original Run}
+\label{sec:original-run}
 
-A 50-epoch run (batch size 4, learning rate $2{\times}10^{-4}$ constant for the first 25 epochs then linearly decayed to zero, $\lambda_{\mathrm{cyc}}=10$, $\lambda_{\mathrm{idt}}=5$) was carried out on the A4000, taking approximately 37 minutes per epoch and $\sim$31 hours in total. Figure~\ref{fig:losscurves} shows the full loss history. The generator and cycle-consistency losses converge smoothly throughout --- on their own, they would read as a healthy training run. The discriminator losses tell a different story: $D_H$ (the discriminator judging HiRISE realism) settles into a stable equilibrium around 0.03 from epoch~10 onward, while $D_R$ (the discriminator judging rover-image realism) starts \emph{higher} than $D_H$ at epoch~1 (0.162 vs.\ 0.095), crosses below it by epoch~3, and then decays smoothly and monotonically for the rest of training, reaching $3.99{\times}10^{-6}$ by epoch~50 (Table~\ref{tab:disc-timeline}). This divergence is visible well before the learning-rate decay begins at epoch~26, so it is not an artefact of the training schedule.
+A 50-epoch run (batch size 4, learning rate $2{\times}10^{-4}$ constant for the first 25 epochs then linearly decayed to zero, $\lambda_{\mathrm{cyc}}=10$, $\lambda_{\mathrm{idt}}=5$) was carried out on the A4000 using the corrected, real-resolution corpus of Chapter~4 (Section~\ref{sec:fullres-pipeline}), taking approximately 37 minutes per epoch and $\sim$31 hours in total. Figure~\ref{fig:losscurves} shows the full loss history. The generator and cycle-consistency losses converge smoothly throughout --- on their own, they would read as a healthy training run. The discriminator losses tell a different story: $D_H$ (the discriminator judging HiRISE realism) settles into a stable equilibrium around 0.03 from epoch~10 onward, while $D_R$ (the discriminator judging rover-image realism) starts \emph{higher} than $D_H$ at epoch~1 (0.162 vs.\ 0.095), crosses below it by epoch~3, and then decays smoothly and monotonically for the rest of training, reaching $3.99{\times}10^{-6}$ by epoch~50 (Table~\ref{tab:disc-timeline}).
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.95\textwidth]{loss_curves_epoch050}
-  \caption{Generator/cycle-consistency loss (top, linear scale) and discriminator loss (bottom, log scale) over 50 epochs of training on the corrected full-resolution HiRISE corpus. $D_R$ collapses from epoch~3 onward while $D_H$ remains stable --- the diagnostic signal discussed in Section~\ref{sec:diagnosis}.}
+  \caption{Generator/cycle-consistency loss (top, linear scale) and discriminator loss (bottom, log scale) over 50 epochs of training on the corrected full-resolution HiRISE corpus. $D_R$ collapses from epoch~3 onward while $D_H$ remains stable.}
   \label{fig:losscurves}
 \end{figure}
 
@@ -31,10 +32,6 @@ A 50-epoch run (batch size 4, learning rate $2{\times}10^{-4}$ constant for the 
   \end{tabular}
 \end{table}
 
-\section{Quantitative Evaluation}
-
-Table~\ref{tab:fid-results} reports FID computed between generated and real rover-domain images (Chapter~4's evaluation pipeline), for both this run and the earlier run on the uncorrected browse-resolution corpus (Section~4.3). Fixing the corpus resolution made FID \emph{worse}, not better --- a counter-intuitive result that Section~\ref{sec:diagnosis} explains.
-
 \begin{table}[H]
   \caption{FID results against the methodology's target ($\leq$55, Chapter~3).}
   \label{tab:fid-results}
@@ -44,56 +41,115 @@ Table~\ref{tab:fid-results} reports FID computed between generated and real rove
     Run & Checkpoint & Corpus & FID \\
     \midrule
     Prior run  & epoch\_025 & Browse-resolution ($\sim$3\,m/px, buggy) & 171.8 \\
-    This run   & epoch\_050 & Real RDR (25\,cm/px, corrected) & 269.9 \\
+    This run   & epoch\_050 & Real RDR (25\,cm/px, 1 region, 7 obs.) & 269.9 \\
     \midrule
     Target (Chapter~3) & --- & --- & $\leq$55 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\section{Visual Inspection of Sample Translations}
-\label{sec:visual}
-
-Sample translation grids saved during training (each showing real HiRISE~$\to$~translated-to-rover~$\to$~reconstructed-HiRISE on top, and real rover~$\to$~translated-to-HiRISE~$\to$~reconstructed-rover below) confirm the same pattern at every epoch inspected, from epoch~1 through the final epoch~50 checkpoint (Figures~\ref{fig:sample001}--\ref{fig:sample050}). The HiRISE-to-rover translation stays a grainy, high-frequency echo of the input with no rover-ground structure; the rover-to-HiRISE translation stays a washed-out, low-contrast ghost of the input rather than adopting HiRISE's characteristic appearance. Both reconstructions (cycle-consistency columns) match their originals closely at every epoch --- but, as Section~\ref{sec:diagnosis} argues, that is a symptom of the underlying problem rather than evidence against it.
+Sample translation grids saved during training (Figures~\ref{fig:sample001}--\ref{fig:sample050}) confirm the same pattern at every epoch inspected: the HiRISE-to-rover translation stays a grainy, high-frequency echo of the input with no rover-ground structure, and both cycle-consistency reconstructions match their originals closely --- a symptom of the underlying problem, not evidence against it.
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.75\textwidth]{sample_epoch001}
-  \caption{Sample translation grid, epoch 1. Real HiRISE input (top-left) already shows the characteristic speckle of genuine 25\,cm/pixel radiometric data.}
+  \caption{Sample translation grid, epoch 1.}
   \label{fig:sample001}
 \end{figure}
-
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.75\textwidth]{sample_epoch030}
-  \caption{Sample translation grid, epoch 30. HiRISE-to-rover output (top-middle) is high-frequency static with no rover-ground structure; $D_R$ is already near collapse at this point (loss $\approx0.0011$).}
+  \caption{Sample translation grid, epoch 30. $D_R$ is already near collapse (loss $\approx0.0011$).}
   \label{fig:sample030}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{sample_epoch050}
+  \caption{Sample translation grid, final epoch 50 checkpoint.}
+  \label{fig:sample050}
+\end{figure}
+
+The immediate, epoch-level mechanism is a discriminator shortcut: $D_H$ can reject $G_{H2R}$'s output purely because it still carries the corrected corpus's genuine sensor grain, without needing to learn what a real rover photograph actually looks like, so $G_{H2R}$ receives a real but semantically uninformative gradient once $D_R$ locks onto that shortcut by epoch~3. This also explains why correcting the corpus resolution made FID \emph{worse} rather than better (Table~\ref{tab:fid-results}): the browse-resolution corpus was smoother and closer to rover-image smoothness, so it did not hand $D_R$ this shortcut as blatantly.
+
+\section{A Deeper Root Cause: Corpus Diversity}
+\label{sec:diagnosis}
+
+The discriminator-shortcut mechanism above is real, but it is not the whole explanation, and treating it as such would have pointed at the wrong fix. An audit of the corpus that produced the 269.9 result found that of the ten Oxia Planum HiRISE observations the real-resolution pipeline targeted, only seven were available as real, single-band RED JP2 products, and all seven happened to fall in the same region --- collapsing the training corpus from the original browse-resolution pipeline's 299 observations across 4 regions down to 7 observations in 1. Separately, Oxia Planum was deliberately selected as the ExoMars landing site \emph{because} it is smooth and low-relief, while the rover-domain training data (Curiosity, Gale Crater) is comparatively rocky --- a genuine content mismatch layered on top of the diversity collapse, and one that is somewhat inherent to the problem, since no ground-truth Oxia Planum rover imagery can exist before a rover has actually landed there.
+
+A literature review conducted in response to this finding (surveying the super-resolution, image-to-image translation, and cross-view synthesis literature) surfaced a pattern absent from the original three-stage design: published work translating nadir/orbital imagery into ground-level/perspective imagery does not attempt pure pixel-space translation. It inserts an explicit geometric intermediate --- a height field or DTM --- between the nadir input and the perspective output, and synthesises texture only in the already-correctly-projected view. Sections~\ref{sec:track1}--\ref{sec:e2e-results} report two lines of work that followed from this: a loss-tuned CycleGAN retrain that isolates the discriminator-shortcut question from the corpus-diversity question (Track~1), and the geometry-mediated redesign itself (Track~2 onward), built as described in Chapter~4, Section~\ref{sec:geometry-impl}.
+
+\section{Track 1: Isolating the Loss-Weight Question}
+\label{sec:track1}
+
+Reducing $\lambda_{\mathrm{cyc}}$ was one of three candidate fixes the original diagnosis proposed for the discriminator shortcut. Testing it cleanly required a corpus that was not itself confounded by the diversity collapse just diagnosed, so Track~1 deliberately trained on the \emph{original}, browse-resolution corpus (37{,}054/4{,}631/4{,}633 HiRISE patches across the full 4 regions, paired with 20{,}417/2{,}552/2{,}553 rover patches) rather than the smaller, single-region real-resolution one --- a resolution/diversity trade-off made explicitly to isolate one variable at a time, and a genuine caveat on how directly Track~1's FID compares against the target, which specifies the true 25\,cm/pixel product.
+
+A 15-epoch, 3-way smoke test on this corpus confirmed the hypothesis: $\lambda_{\mathrm{cyc}}=10$ reproduced the near-identity shortcut, $\lambda_{\mathrm{cyc}}=1$ broke it but visibly degraded output fidelity, and $\lambda_{\mathrm{cyc}}=3$ (paired with $\lambda_{\mathrm{idt}}=1.5$) broke the shortcut cleanly without that degradation. A full 100-epoch run at these validated weights followed (Table~\ref{tab:track1-fid}), with no collapse signature at any point ($D_R$ never approached the earlier run's $10^{-6}$ range).
+
+\begin{table}[H]
+  \caption{Track 1 (loss-tuned) FID trajectory, full 4{,}633-image test set.}
+  \label{tab:track1-fid}
+  \centering
+  \begin{tabular}{rr}
+    \toprule
+    Epoch & FID \\
+    \midrule
+    15  & 115.73 \\
+    25  & 107.54 \\
+    35  & 100.53 \\
+    45  & 104.45 \\
+    55  & 102.62 \\
+    100 & \textbf{95.831} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The run plateaus around FID~100--105 from epoch~35 onward, with the final checkpoint's 95.831 --- Track~1's best, and this dissertation's best CycleGAN FID to date --- only becoming visible once the full 100 epochs completed; the flat loss curves in the learning-rate decay tail apparently still hid a small real improvement.\footnote{\texttt{epoch\_095.pt}'s FID was never computed, having been deleted in a disk-pruning pass before it could be measured; \texttt{epoch\_100}'s 95.831 stands in as the closest available reading, since the run was in a flat loss plateau from epoch~55 through 100.} This is a real fix for the diagnosed shortcut, and a genuine improvement over both the buggy browse-resolution baseline (171.8) and the corrected-but-collapsed corpus (269.9). It is still 1.7$\times$ above the target of $\leq$55, and, more importantly, visual inspection of Track~1's translated outputs at every checkpoint shows the same 2D spatial layout as the input at every epoch --- the crater, stripe, and slope positions do not change. This is not a loss-weight problem: a 2D convolutional generator trained under cycle-consistency has no mechanism to reinterpret scene content from a genuinely different physical vantage point, only to restyle it in place. Only an explicit geometric stage --- Track~2 onward --- can deliver real viewpoint translation, which is the more fundamental reason a pure loss-weight fix cannot reach the target FID on its own.
+
+\section{Track 2: Geometry-Mediated Retraining}
+\label{sec:track2}
+
+Track~2 retrains the same architecture and validated loss weights ($\lambda_{\mathrm{cyc}}=3$, $\lambda_{\mathrm{idt}}=1.5$) on the geometry-mediated corpus of Chapter~4 (Section~\ref{sec:geocorpus-impl}): 1{,}513 rendered ground-view images (1{,}210/151/152 train/val/test) from 8 real stereo DTMs in the Oxia Planum landing region, in place of a raw HiRISE crop as CycleGAN's domain-A input. 25 epochs completed with no collapse at any point ($D_R$ stayed in a healthy 0.03--0.5 range throughout).
+
+FID against the real rover test set was 426.0 --- much worse than Track~1's 95.8, but not a fair comparison: the geometry corpus's 152-image test set is small and visually homogeneous relative to the 2{,}553-image real rover distribution, and FID was never really the point of this track. Visual inspection was. It confirms geometry-mediation breaks the near-identity shortcut in a way loss-tuning alone (Track~1) cannot: the previously black, unrendered ``sky'' region above the horizon gets filled with invented texture in the output, and the ground pattern changes structurally rather than merely shifting colour or contrast --- the generator is not just copying its input. But output diversity is compressed: three translations from visually distinct inputs (different horizon shapes) share a dominant chevron/zigzag texture motif. Quantified, the ground-region mean pixel difference between outputs (22--28, 0--255 scale) is lower than between their corresponding inputs (29--40) --- the generator partially, but not fully, tracks input content, leaning on a shared learned texture template consistent with the corpus's own known risk: only 8 distinct source terrains behind 1{,}210 training images.
+
+Geometry-mediation is therefore validated as fixing the specific failure mode that broke Tracks~1 and the original run (the architectural inability to translate viewpoint, and the discriminator shortcut respectively), which is a real, positive result for this dissertation's core methodological claim. But the small corpus caps texture diversity in its current form, and Track~2 does not yet produce convincingly varied rover-eye renders on its own — motivating the separate, paired-supervision texture-synthesis stage (Track~3, Section~\ref{sec:e2e-results}) rather than asking the geometry-mediated CycleGAN to solve texture diversity unaided.
+
+\section{Single-Image DTM Estimation}
+\label{sec:dtm-results}
+
+Track~2's renderer needs a real stereo DTM, and only 8 such products exist for the whole landing region. The single-image DTM estimator of Chapter~4 (Section~\ref{sec:dtmestimator-impl}) is evaluated against 21 held-out real Gale Crater patches with a genuine stereo DTM ground truth, achieving a mean RMSE of \textbf{2.02\,m} (std.\ 0.83\,m). Qualitatively, rendering the estimator's own output reproduces the same large-scale artefacts a real DTM's render shows at this site, rather than introducing new ones, and it smooths over the real DTM's stereo-interpolation facet noise while tracking coarse structure --- an expected and acceptable behaviour for a network predicting a physically smooth quantity.
+
+\section{End-to-End Chain: Does the Estimator's Error Actually Matter?}
+\label{sec:e2e-results}
+
+The estimator's RMSE is only useful as a number if it can be connected to what actually reaches a viewer: does swapping the real DTM for the estimator's output visibly change the final, texture-synthesised image relative to using ground truth? Answering this required chaining all three geometry-mediation components together for the first time (\texttt{run\_end\_to\_end\_pipeline.py}, Chapter~4 Section~\ref{sec:e2e-impl}) on the same real Gale HiRISE crop, once against the real stereo DTM and once against the estimator's output, both fed through the same Track~3 ControlNet.
+
+The first two attempts were inconclusive. Run at the corpus's default crop location (the raster centre) and a steep $-15^{\circ}$ camera pitch, both the real-DTM and estimated-DTM crude renders stayed dominated by a large, flat, low-texture region --- a ``shelf'' artefact --- leaving neither condition map with much real geometric signal to propagate. A follow-up run at a shallower $-5^{\circ}$ pitch, on the assumption that a steep down-look was responsible, produced the same result: the shelf persisted regardless of pitch, ruling out camera angle as the cause.
+
+A diagnostic tool (\texttt{find\_e2e\_crop\_candidate.py}) built to investigate scored candidate camera positions across the full DTM by \texttt{ground\_entropy} (the same metric used to filter the geometry corpus, Chapter~4 Section~\ref{sec:geocorpus-impl}), and revealed the actual problem: the default crop's render was only 10\% sky, yet scored a low ground\_entropy of 1.92 --- the ``shelf'' is a large, flat, textureless region of \emph{drawn ground}, not an empty frame, which is exactly why changing pitch never helped. Scanning 150 candidate positions found one scoring 6.08, over 3$\times$ higher, at row 6{,}439/column 2{,}730 of the same DTM.
+
+Re-running the full chain at this location, at the original $-15^{\circ}$ pitch, produced the first clean result (Figure~\ref{fig:e2e-newcrop}). The real-DTM and estimated-DTM crude renders now visibly differ in horizon and slope shape (Figure~\ref{fig:e2e-crude-renders}) rather than both being near-blank, and that difference propagates through the Track~3 ControlNet to genuinely different final images: the real-DTM chain's output shows a large dune/rock formation dominating the foreground with strong cast shadows, while the estimated-DTM chain's output shows a flatter rocky plain with different scene framing entirely. This is the first evidence in the project that the DTM estimator's $\sim$2\,m RMSE visibly affects the pipeline's final output, rather than both chains simply converging on the same texture-synthesis prior because the condition signal was too degenerate to carry any real difference.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.48\textwidth]{e2e_newcrop_real_render}\hfill
+  \includegraphics[width=0.48\textwidth]{e2e_newcrop_estimated_render}
+  \caption{Crude perspective renders at the high-structure crop, $-15^{\circ}$ pitch: real stereo DTM (left) vs.\ the DTM estimator's own output (right). Unlike every prior test crop, the two now visibly diverge in horizon and slope shape.}
+  \label{fig:e2e-crude-renders}
 \end{figure}
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.75\textwidth]{sample_epoch050}
-  \caption{Sample translation grid, final epoch 50 checkpoint. The same pattern persists: HiRISE-to-rover stays noise-like, rover-to-HiRISE stays a washed-out echo of the input.}
-  \label{fig:sample050}
+  \includegraphics[width=\textwidth]{e2e_newcrop_comparison}
+  \caption{End-to-end chain at the high-structure crop, left to right: HiRISE ortho input, real-DTM crude render, real-DTM chain's final Track~3 output, estimated-DTM chain's final Track~3 output. The two final panels diverge in composition, not just texture.}
+  \label{fig:e2e-newcrop}
 \end{figure}
 
-\section{Diagnosis}
-\label{sec:diagnosis}
+A caveat carries over from Track~3's own limited corpus: both final outputs still show a repeating ripple/dune texture bias relative to a real (loosely, not camera-matched) reference NAVCAM photo at the same site, which shows far more fine rock-clutter chaos. This is consistent with Track~3's training corpus (27 real paired condition/target images) being small, and is a separate, already-understood limitation rather than a new finding from this test.
 
-The evidence in Sections~4.1--4.3 converges on a specific, mechanistic explanation rather than a generic ``GANs are unstable'' account.
+\section{Synthesis}
+\label{sec:synthesis}
 
-$D_R$ judges whether a given image is a genuine rover photograph; it is the discriminator that tells $G_{H2R}$ (the HiRISE-to-rover generator) whether its output is convincing. The corrected HiRISE corpus (Chapter~4) is genuinely grainy --- visible sensor speckle from real 16-bit radiometric data, stretched to 8-bit --- while real rover NAVCAM photographs are comparatively smooth, well-exposed camera images. That is a low-level \emph{noise-statistics} gap layered on top of the intended \emph{style} gap the network is meant to learn to bridge, and it is a far easier signal for a convolutional discriminator to key on than genuine cross-domain semantics (crater texture versus rock/dust texture): $D_R$ can reject $G_{H2R}$'s output purely because it still carries HiRISE-style grain, without ever needing to learn what a real rover photograph actually looks like. Once $D_R$ locks onto that shortcut --- by epoch~3, per Table~\ref{tab:disc-timeline} --- it wins for the rest of training essentially for free, so $G_{H2R}$ receives a real but semantically uninformative gradient, consistent with its output staying a grainy echo of the input at every epoch inspected (Section~\ref{sec:visual}). The reverse direction, $G_{R2H}$ turning a smooth rover image grainy, is the easier direction for a generator to fake at least superficially, which is consistent with $D_H$ remaining in a healthier, contested equilibrium throughout.
+Read against Objective~O2 (Section~1.2), this chapter reports genuine progress and genuine open gaps in roughly equal measure. On the positive side: the original failure was traced to a specific, evidenced mechanism at two levels (a discriminator shortcut, and the corpus diversity collapse behind it), the loss-weight fix for the first was validated in isolation (Track~1), geometry-mediation was validated as fixing the second in the way loss-tuning cannot (Track~2), and today's high-structure-crop test is the first real evidence that the geometry-mediated chain's weakest link --- the single-image DTM estimator standing in for a real stereo DTM --- actually matters to what a viewer would see, rather than being masked by an uninformative test.
 
-This account also explains why correcting the corpus resolution made FID worse rather than better (Table~\ref{tab:fid-results}): the earlier, browse-resolution corpus was JPEG-compressed and resampled, and therefore smoother and closer to rover-image smoothness, so it did not hand $D_R$ this shortcut as blatantly. Fixing the data-quality bug was still the correct thing to do --- training and evaluating against genuinely wrong-resolution imagery would have made every subsequent result meaningless --- but it surfaced a training-dynamics problem that the smoother, wrong corpus had been partially masking.
-
-\section{Candidate Fixes}
-
-Three candidate fixes follow directly from the diagnosis, in rough order of expected leverage versus implementation effort:
-
-\begin{enumerate}
-  \item \textbf{Close the noise-statistics gap directly}, either by applying mild denoising to real HiRISE patches or by adding matched synthetic sensor grain to the rover domain, so that $D_R$ can no longer separate real from generated rover images on texture statistics alone and is forced to engage with genuine content.
-  \item \textbf{Weaken $D_R$ specifically} relative to the generators --- a lower learning rate or a reduced update frequency for $D_R$ alone --- which treats the symptom directly and is the cheapest to try.
-  \item \textbf{Reduce $\lambda_{\mathrm{cyc}}$ below 10}, so that cycle-consistency stops rewarding a near-identity mapping and $G_{H2R}$ is less anchored to reproducing input structure.
-\end{enumerate}
-
-Resolving this diagnosis is the immediate next priority, ahead of building the physics-constrained UNSB architecture Chapter~3 specifies, since a well-understood, correctly-balanced CycleGAN baseline is a more useful point of comparison for that later work than one left in its current, diagnosed-but-unresolved state.
+On the open side: FID remains 1.7$\times$ above target even at Track~1's best; Track~2's output diversity is compressed by its small, 8-terrain corpus; Track~3's texture synthesis is trained on only 27 real pairs and shows a corresponding texture bias; and the architecture that produced these results --- CycleGAN for viewpoint-preserving restyling, a deterministic renderer for geometry, and a separately-trained ControlNet for texture --- is a different family from the physics-constrained Neural Schr\"{o}dinger Bridge Chapter~3 specifies. Chapter~6 addresses each of these as concrete next steps, including how this last, architectural divergence from the approved methodology should be reconciled.

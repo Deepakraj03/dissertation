@@ -1,28 +1,46 @@
 \chapter{Future Plan}
 \label{ch:futureplan}
 
-This chapter sets out the work remaining to complete the dissertation, in the order it is planned to be carried out, and how each item connects back to the objectives in Section~1.2.
+This chapter sets out the work remaining to complete the dissertation, in priority order, and how each item connects back to the objectives in Section~1.2 and the gaps Chapter~5 (Section~\ref{sec:synthesis}) left open.
 
-\section{Resolve the CycleGAN Discriminator Imbalance}
+\section{Reconcile the Proposed Architecture Against What Was Actually Built}
+\label{sec:reconcile}
 
-The most immediate task is acting on the diagnosis in Chapter~5: closing the noise-statistics gap between the real-resolution HiRISE corpus and the rover corpus (most likely via mild denoising of HiRISE patches, matched synthetic grain on the rover side, or both), then retraining and re-evaluating against the same FID and visual-inspection protocol used in Chapter~5. If the diagnosis is correct, FID should drop substantially and the sample-grid translations should stop showing the near-identity mapping documented in Section~5.3. This closes out the CycleGAN baseline for Objective~O2 and establishes the well-understood point of comparison the physics-constrained UNSB is meant to improve on.
+Chapter~3 specifies a physics-constrained Neural Schr\"{o}dinger Bridge (UNSB) with four physics-informed loss terms as Stage~2. What Chapter~5 reports instead is a loss-tuned CycleGAN for restyling (Track~1), a deterministic geometric renderer with no learned component, a single-image DTM estimator, and a separately-trained ControlNet for texture synthesis (Track~3) --- a different architecture family, arrived at because the corpus-diversity diagnosis in Chapter~5 (Section~\ref{sec:diagnosis}) pointed at an explicit-geometry redesign, not because UNSB itself was found lacking. This divergence has not yet been reconciled against the approved methodology, and doing so is now higher-leverage than any further experiment: it is a two-way fork, not a single task.
 
-\section{Complete the Stage 1 Super-Resolution Corpus}
+\textbf{Option A --- implement UNSB as specified.} Build the entropy-regularised optimal-transport bridge and the four physics losses (Chapter~3, Equations~\ref{eq:sb_ot}--\ref{eq:l_total}) on top of the now-validated geometry-mediated corpus, treating Tracks~1--2 as the empirical baseline UNSB is meant to improve on, exactly as Chapter~3 (Section~\ref{sec:architecture}) originally intended. This keeps Methodology unchanged but is the larger remaining engineering task by a wide margin, and the three auxiliary loss networks (shadow-direction, Hapke inversion, geological classifier) would each need training data and evaluation of their own before the main bridge could be assessed.
 
-In parallel with the CycleGAN work, a CTX/HiRISE co-registration pipeline for Objective~O1 is under development: a HiRISE footprint index parser, a Murray Lab CTX mosaic resolver, an orchestration script that produces paired low-/high-resolution crops, and a visual QA tool. A five-image smoke test has succeeded with all pairs correctly aligned; the next steps are a visual confirmation of those five preview pairs, followed by the full batch run across the intended observation set, before any Stage~1 model training begins.
+\textbf{Option B --- formally adopt the geometry-mediated pipeline as a documented deviation.} Rewrite Chapter~3's Stage~2 architecture section to describe the renderer + DTM estimator + ControlNet pipeline actually built, with an explicit rationale section explaining why: the corpus-diversity finding made an explicit geometric intermediate necessary regardless of which learned architecture sits either side of it, and Track~3's paired-supervision texture synthesis is arguably a more direct fit to a Mars corpus this small than an unpaired bridge objective would be. This is less additional engineering, but requires being explicit in the dissertation's own words that the design changed and why, rather than the two chapters silently describing different systems.
 
-\section{Implement the Physics-Constrained UNSB (Objective O2)}
+Neither option should be assumed by default; which is chosen determines how much of the remaining timeline (Section~\ref{sec:timeline}) is architecture implementation versus consolidation and evaluation of what already exists.
 
-Once the CycleGAN baseline is resolved, the Neural Schr\"{o}dinger Bridge architecture and the four physics-informed loss terms specified in Chapter~3 (Section~3.1) will be implemented: the shadow-direction, Hapke photometric, and geological morphometry auxiliary networks must each be trained separately before the main IPFP training loop (Algorithm~\ref{alg:stage2}) can run. This is the central remaining engineering task and the dissertation's core methodological contribution. The CycleGAN results in Chapter~5 already provide a concrete, measured baseline (FID, and the specific discriminator-imbalance failure mode) that the physics-constrained architecture will be evaluated against, rather than only against literature-derived estimates.
+\section{Decide Track 2's Corpus-Diversity Limitation}
+\label{sec:track2-decision}
 
-\section{Gaussian Splatting Rendering (Objective O3)}
+Track~2 (Chapter~5, Section~\ref{sec:track2}) validated that geometry-mediation breaks the near-identity shortcut, but its output diversity is compressed by an 8-terrain source corpus. Three defensible paths follow, and any of the three is a reasonable dissertation position provided it is stated and justified rather than left implicit:
 
-Once Stage~2 produces usable synthetic perspective imagery, a 3D Gaussian Splatting scene will be trained on the resulting multi-view set, following the reference implementation and the MADNet-2.0-seeded initialisation described in Chapter~3, and benchmarked for render throughput against the $\geq$72\,fps VR target.
+\begin{itemize}
+  \item \textbf{Accept it as a documented limitation.} Report the compression honestly against the corpus's real constraint (only 8 stereo DTMs exist for the landing region at all) and argue the shortcut-breaking result stands on its own.
+  \item \textbf{Scale the corpus.} Widen the DTM search beyond the strict landing-region bounding box (accepting some geographic content dilution, the same trade-off Chapter~4, Section~\ref{sec:renderer-impl} made in the other direction) or increase per-DTM crop density beyond the current 200-per-product cap.
+  \item \textbf{Change the Stage~2 restyling architecture.} A diffusion-based or transformer-based generator conditioned more directly on the render than CycleGAN's cycle-consistency objective allows might resist the shared-texture-template failure mode more effectively; this option is more entangled with Section~\ref{sec:reconcile}'s fork than the other two.
+\end{itemize}
 
-\section{Full Evaluation (Objective O4)}
+\section{Close or Formally Cut Stage 1 (DiffusionSR)}
+\label{sec:diffusionsr-decision}
 
-The evaluation framework in Chapter~3 (Section~3.4) --- FID and LPIPS, structural fidelity against synthetic ground truth, shadow-angle error, Hapke BRDF residual, hallucination rate, and VR render quality --- will be applied to the completed pipeline and compared against the four baselines in Table~\ref{tab:baselines}, including the CycleGAN baseline now measured directly (Chapter~5) rather than estimated from the literature.
+The CTX/HiRISE co-registration pipeline for Stage~1 (nadir super-resolution) has not been touched since the very first day of the project: a five-image smoke test succeeded, and it has not progressed since, while the geometry-mediated Stage~1.5 work (Chapter~4, Sections~\ref{sec:dtmestimator-impl} onward) proceeded on the assumption that HiRISE coverage is already available at the primary test sites, which Chapter~3 (Section~\ref{sec:formulation}) notes makes Stage~1 optional there. Two honest paths: run the full co-registration batch and fold Stage~1 into the final system for sites without native HiRISE coverage, or formally scope it out of the submitted dissertation with a stated reason (limited remaining time, and Stage~1.5/2/3 being the parts Objective~O2 actually depends on). A month-old, silently unstarted thread is a worse look in the final document than either choice made explicitly.
+
+\section{Extend the Evaluation Framework Beyond FID and RMSE}
+\label{sec:eval-extend}
+
+Chapter~3's evaluation framework (Section~\ref{sec:evaluation}) specifies six measurements; to date only FID (Chapter~5, Tables~\ref{tab:fid-results}, \ref{tab:track1-fid}) and the DTM estimator's RMSE (Section~\ref{sec:dtm-results}, not itself part of the original framework) have been computed even once. Shadow-angle error is the cheapest of the four untouched metrics to add next: HiRISE products already carry solar azimuth/elevation metadata, and the render pipeline (Chapter~4, Section~\ref{sec:renderer-impl}) already produces a geometrically exact synthetic scene to compare a generated image's apparent shadow direction against. LPIPS is a near-free addition alongside FID once a structural reference exists (the geometry corpus's own renders can serve as that reference for Track~2). Hapke BRDF residual and hallucination rate both require the auxiliary networks referenced in Section~\ref{sec:reconcile}'s Option~A, and are realistically gated on that decision.
+
+\section{Scope Stage 3 (Gaussian Splatting) Explicitly}
+\label{sec:gs-decision}
+
+No code exists yet for the 3D Gaussian Splatting rendering stage Chapter~3 (Section~\ref{sec:formulation}) specifies as Stage~3, and Objective~O3's $\geq$72\,fps VR target has not been assessed at all. Given the remaining timeline, this should be scoped in or out of the final submission explicitly now, since the decision shapes how much of Stage~2's output needs to be multi-view-consistent (several perspective renders of the same scene from nearby poses) versus evaluatable as single images, which is all Chapter~5 has produced so far.
 
 \section{Indicative Timeline}
+\label{sec:timeline}
 
-Resolving the CycleGAN diagnosis and completing the Stage~1 co-registration batch are the near-term priorities, since both feed directly into Stage~2 training. UNSB implementation and training is the largest remaining task and is expected to require the majority of the time before the next milestone. Gaussian Splatting integration and the full evaluation pass follow once Stage~2 produces synthetic imagery of sufficient quality, with time reserved at the end for writing the Results/Evaluation and Conclusions chapters that this draft does not yet include.
+Reconciling the architecture (Section~\ref{sec:reconcile}) and bringing this document current are the immediate priorities, since every other item's scope depends on which of Options~A/B is chosen. Deciding Track~2's corpus fate and DiffusionSR's disposition follow directly and are comparatively cheap to resolve. Extending the evaluation framework should begin with shadow-angle error alongside whichever Stage~2 work Section~\ref{sec:reconcile} leads to, rather than waiting for it to finish. Gaussian Splatting, if scoped in, is the largest remaining net-new engineering task and would follow once Stage~2 output is stable; if scoped out, time is reserved instead for a full Results/Evaluation pass against the extended metric set and for the Conclusions chapter, neither of which this draft yet includes.

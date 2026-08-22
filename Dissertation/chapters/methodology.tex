@@ -131,7 +131,7 @@ Table~\ref{tab:baselines} sets out the four baselines the proposed method is com
   \end{tabular}}
 \end{table}
 
-\noindent The literature-derived $\sim$110 FID estimate for a na\"{i}ve CycleGAN baseline is a useful point of comparison for the actual CycleGAN results reported in Chapter~5: the trained baseline currently scores substantially worse (269.9), and the diagnosis in Chapter~5 explains why that comparison is informative rather than merely disappointing.
+\noindent The literature-derived $\sim$110 FID estimate for a na\"{i}ve CycleGAN baseline is a useful point of comparison for the actual CycleGAN results reported in Chapter~5: the initial trained baseline scored substantially worse (269.9), traced to a discriminator shortcut and, behind it, a corpus-diversity collapse; a loss-tuned retrain isolating the shortcut fix reached 95.8, closer to but still above this literature estimate. Chapter~5 also reports a geometry-mediated redesign, prompted by that same diagnosis, whose relationship to the UNSB architecture specified above is one of the decisions Chapter~6 addresses.
 
 \section{Summary}
 
