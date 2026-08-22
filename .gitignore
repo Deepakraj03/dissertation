@@ -71,6 +71,13 @@ ControlNet/Data/e2e_pipeline_output/*
 ControlNet/Data/e2e_pipeline_output_pitch5/*
 !ControlNet/Data/e2e_pipeline_output_pitch5/*.png
 !ControlNet/Data/e2e_pipeline_output_pitch5/*.jpg
+# _newcrop: same -15deg pitch as the original run, but at the
+# find_e2e_crop_candidate.py-selected high-ground_entropy crop location
+# instead of the raster-center crop both prior runs used.
+!ControlNet/Data/e2e_pipeline_output_newcrop/
+ControlNet/Data/e2e_pipeline_output_newcrop/*
+!ControlNet/Data/e2e_pipeline_output_newcrop/*.png
+!ControlNet/Data/e2e_pipeline_output_newcrop/*.jpg
 
 # Training artifacts (move machine-to-machine via rsync, not git) --
 # the ControlNet checkpoint is ~1.4GB, well past what git should hold.
