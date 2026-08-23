@@ -76,7 +76,7 @@ The immediate, epoch-level mechanism is a discriminator shortcut: $D_H$ can reje
 
 The discriminator-shortcut mechanism above is real, but it is not the whole explanation, and treating it as such would have pointed at the wrong fix. An audit of the corpus that produced the 269.9 result found that of the ten Oxia Planum HiRISE observations the real-resolution pipeline targeted, only seven were available as real, single-band RED JP2 products, and all seven happened to fall in the same region --- collapsing the training corpus from the original browse-resolution pipeline's 299 observations across 4 regions down to 7 observations in 1. Separately, Oxia Planum was deliberately selected as the ExoMars landing site \emph{because} it is smooth and low-relief, while the rover-domain training data (Curiosity, Gale Crater) is comparatively rocky --- a genuine content mismatch layered on top of the diversity collapse, and one that is somewhat inherent to the problem, since no ground-truth Oxia Planum rover imagery can exist before a rover has actually landed there.
 
-A literature review conducted in response to this finding (surveying the super-resolution, image-to-image translation, and cross-view synthesis literature) surfaced a pattern absent from the original three-stage design: published work translating nadir/orbital imagery into ground-level/perspective imagery does not attempt pure pixel-space translation. It inserts an explicit geometric intermediate --- a height field or DTM --- between the nadir input and the perspective output, and synthesises texture only in the already-correctly-projected view. Sections~\ref{sec:track1}--\ref{sec:e2e-results} report two lines of work that followed from this: a loss-tuned CycleGAN retrain that isolates the discriminator-shortcut question from the corpus-diversity question (Track~1), and the geometry-mediated redesign itself (Track~2 onward), built as described in Chapter~4, Section~\ref{sec:geometry-impl}.
+A literature review conducted in response to this finding surfaced a cluster absent from the original three-stage design's reading list: Sat2Density~\cite{qian2023sat2density}, Sat2Scene~\cite{li2024sat2scene}, and CrossViewDiff~\cite{li2024crossviewdiff} (Chapter~2, Section~\ref{sec:crossview}) all translate nadir/satellite imagery into ground-level imagery in Earth remote sensing, and none attempts pure pixel-space translation. Each inserts an explicit geometric or structural intermediate, a density field, a 3D voxel structure, or a separately estimated scene-structure map, between the nadir input and the perspective output, and synthesises texture only once that intermediate has resolved the viewpoint change. Sections~\ref{sec:track1}--\ref{sec:e2e-results} report two lines of work that followed from this: a loss-tuned CycleGAN retrain that isolates the discriminator-shortcut question from the corpus-diversity question (Track~1), and the geometry-mediated redesign itself (Track~2 onward), built as described in Chapter~4, Section~\ref{sec:geometry-impl}.
 
 \section{Track 1: Isolating the Loss-Weight Question}
 \label{sec:track1}
@@ -112,7 +112,7 @@ Track~2 retrains the same architecture and validated loss weights ($\lambda_{\ma
 
 FID against the real rover test set was 426.0 --- much worse than Track~1's 95.8, but not a fair comparison: the geometry corpus's 152-image test set is small and visually homogeneous relative to the 2{,}553-image real rover distribution, and FID was never really the point of this track. Visual inspection was. It confirms geometry-mediation breaks the near-identity shortcut in a way loss-tuning alone (Track~1) cannot: the previously black, unrendered ``sky'' region above the horizon gets filled with invented texture in the output, and the ground pattern changes structurally rather than merely shifting colour or contrast --- the generator is not just copying its input. But output diversity is compressed: three translations from visually distinct inputs (different horizon shapes) share a dominant chevron/zigzag texture motif. Quantified, the ground-region mean pixel difference between outputs (22--28, 0--255 scale) is lower than between their corresponding inputs (29--40) --- the generator partially, but not fully, tracks input content, leaning on a shared learned texture template consistent with the corpus's own known risk: only 8 distinct source terrains behind 1{,}210 training images.
 
-Geometry-mediation is therefore validated as fixing the specific failure mode that broke Tracks~1 and the original run (the architectural inability to translate viewpoint, and the discriminator shortcut respectively), which is a real, positive result for this dissertation's core methodological claim. But the small corpus caps texture diversity in its current form, and Track~2 does not yet produce convincingly varied rover-eye renders on its own — motivating the separate, paired-supervision texture-synthesis stage (Track~3, Section~\ref{sec:e2e-results}) rather than asking the geometry-mediated CycleGAN to solve texture diversity unaided.
+Geometry-mediation is therefore validated as fixing the specific failure mode that broke Tracks~1 and the original run (the architectural inability to translate viewpoint, and the discriminator shortcut respectively), which is a real, positive result for this dissertation's core methodological claim. But the small corpus caps texture diversity in its current form, and Track~2 does not yet produce convincingly varied rover-eye renders on its own, which motivates the separate, paired-supervision texture-synthesis stage (Track~3, Section~\ref{sec:e2e-results}) rather than asking the geometry-mediated CycleGAN to solve texture diversity unaided.
 
 \section{Single-Image DTM Estimation}
 \label{sec:dtm-results}
@@ -147,9 +147,75 @@ Re-running the full chain at this location, at the original $-15^{\circ}$ pitch,
 
 A caveat carries over from Track~3's own limited corpus: both final outputs still show a repeating ripple/dune texture bias relative to a real (loosely, not camera-matched) reference NAVCAM photo at the same site, which shows far more fine rock-clutter chaos. This is consistent with Track~3's training corpus (27 real paired condition/target images) being small, and is a separate, already-understood limitation rather than a new finding from this test.
 
-\section{Synthesis}
-\label{sec:synthesis}
+\section{Common Evaluation Metrics Across Models}
+\label{sec:common-metrics-results}
+
+Tracks~1 and~2 were evaluated with FID; Track~3 was evaluated with KID, SSIM, and PSNR instead of FID, because FID's Gaussian-covariance estimate is unreliable at Track~3's small sample size, a documented, deliberate choice (Chapter~4, Section~\ref{sec:controlnet-impl}), not an oversight. That left no single number comparable across all three generative stages. KID (an unbiased, small-sample-robust distributional metric) is computed here for Track~1 and Track~2 as well, reusing the same feature-extraction and kernel-MMD$^2$ implementation already validated for Track~3, so Table~\ref{tab:common-metrics} reports one metric that is valid regardless of each track's very different sample size (4,633 for Track~1, 152 for Track~2, 9--27 for Track~3), alongside a quantitative check of the end-to-end pipeline's two chains that was previously only assessed by eye (Chapter~5, Section~\ref{sec:e2e-results}).
+
+\begin{table}[H]
+  \caption{KID across all three generative stages.}
+  \label{tab:common-metrics}
+  \centering
+  \small
+  \begin{tabular}{p{4.6cm}rrp{4.4cm}}
+    \toprule
+    Model & KID & $n$ (gen / real) & Notes \\
+    \midrule
+    Track~1 (loss-tuned CycleGAN) & 0.0344 & 4{,}633 / 2{,}553 & No geometric mediation \\
+    Track~2 (geometry-mediated CycleGAN) & 0.4979 & 152 / 2{,}553 & Breaks the shortcut, compressed diversity \\
+    Track~3 (paired ControlNet) & 0.192 & 9 / 9 & From Chapter~4's original evaluation \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Read alongside FID, KID tells a consistent story: Track~1's translated outputs are, in distributional terms, close to the real rover corpus (KID~0.034), which is unsurprising given Chapter~5, Section~\ref{sec:track1}'s finding that Track~1 mostly restyles its input in place rather than reinterpreting viewpoint; matching a target distribution's low-level statistics is a substantially easier bar than producing genuine perspective content. Track~2's KID (0.498) is an order of magnitude worse, consistent with the qualitative finding in Section~\ref{sec:track2} that its outputs lean on a shared texture template rather than tracking real rover-photo diversity, and with its much smaller, 152-image evaluation set. Track~3's KID (0.192) sits between the two, computed on the smallest sample of the three (9 images, the same test split Chapter~4 originally evaluated); its SSIM (0.186) and PSNR (11.4\,dB) values, reported alongside KID for that track, measure a stricter, different question, exact reconstruction of one specific real photo, which a model that hallucinates plausible but unseen rock and ripple detail is not expected to score well on regardless of how convincing its output looks.
+
+Table~\ref{tab:e2e-metrics} extends this to the end-to-end pipeline (Section~\ref{sec:e2e-results}), turning its previously qualitative comparison into numbers. The real-DTM and estimated-DTM chains' final outputs differ substantially from each other (SSIM~0.269, LPIPS~0.470), which is the quantitative form of the claim that the DTM estimator's error visibly propagates to the final image. Both chains score similarly low against the loose, not camera-matched, real reference photograph (LPIPS~0.537 and~0.540 respectively); this pair of numbers is not a meaningful ranking between the two chains, since neither render was ever expected to reconstruct that specific, non-corresponding photograph, but their near-equality does confirm that the real-vs-estimated-DTM difference above reflects the two chains actually differing from each other, not one of them coincidentally drifting closer to an unrelated reference image.
+
+\begin{table}[H]
+  \caption{Quantitative comparison of the end-to-end pipeline's two chains (Chapter~5, Section~\ref{sec:e2e-results}), 256$\times$256 grayscale-normalised, matching Track~3's evaluation preprocessing.}
+  \label{tab:e2e-metrics}
+  \centering
+  \begin{tabular}{lrrr}
+    \toprule
+    Comparison & SSIM & PSNR (dB) & LPIPS \\
+    \midrule
+    Real-DTM chain vs.\ estimated-DTM chain & 0.269 & 11.94 & 0.470 \\
+    Real-DTM chain vs.\ loose reference photo & 0.083 & 10.35 & 0.537 \\
+    Estimated-DTM chain vs.\ loose reference photo & 0.109 & 10.03 & 0.540 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 Read against Objective~O2 (Section~1.2), this chapter reports genuine progress and genuine open gaps in roughly equal measure. On the positive side: the original failure was traced to a specific, evidenced mechanism at two levels (a discriminator shortcut, and the corpus diversity collapse behind it), the loss-weight fix for the first was validated in isolation (Track~1), geometry-mediation was validated as fixing the second in the way loss-tuning cannot (Track~2), and today's high-structure-crop test is the first real evidence that the geometry-mediated chain's weakest link --- the single-image DTM estimator standing in for a real stereo DTM --- actually matters to what a viewer would see, rather than being masked by an uninformative test.
 
-On the open side: FID remains 1.7$\times$ above target even at Track~1's best; Track~2's output diversity is compressed by its small, 8-terrain corpus; Track~3's texture synthesis is trained on only 27 real pairs and shows a corresponding texture bias; and the architecture that produced these results --- CycleGAN for viewpoint-preserving restyling, a deterministic renderer for geometry, and a separately-trained ControlNet for texture --- is a different family from the physics-constrained Neural Schr\"{o}dinger Bridge Chapter~3 specifies. Chapter~6 addresses each of these as concrete next steps, including how this last, architectural divergence from the approved methodology should be reconciled.
+On the open side: FID remains 1.7$\times$ above target even at Track~1's best; Track~2's output diversity is compressed by its small, 8-terrain corpus; and Track~3's texture synthesis is trained on only 27 real pairs and shows a corresponding texture bias. The architecture that produced these results, a deterministic renderer for geometry, a single-image estimator standing in for stereo coverage, and a separately-trained ControlNet for texture, is a different family from the physics-constrained Neural Schr\"{o}dinger Bridge Chapter~3 originally specified; Chapter~3, Section~\ref{sec:deviation-rationale} states why the design changed, and Section~\ref{sec:results-vs-targets} below reports every result in this chapter against the original target table (Chapter~3, Table~\ref{tab:baselines}) directly, rather than leaving the comparison implicit. Chapter~6 addresses the remaining open items as concrete next steps.
+
+\section{Results Against the Original Targets}
+\label{sec:results-vs-targets}
+
+Table~\ref{tab:results-vs-targets} restates every quantitative target Chapter~3 set (Table~\ref{tab:dataset}, Table~\ref{tab:baselines}, and Section~\ref{sec:evaluation}'s six-metric evaluation framework) against what this project actually measured, so the gap is a single table rather than something a reader has to reconstruct from six sections. A dash marks a target that was not evaluated at all, not a target that was evaluated and missed; Section~\ref{sec:eval-extend} and Chapter~6 explain which of those were cut deliberately, for stated reasons, versus left short by time.
+
+\begin{table}[H]
+  \caption{Every quantitative target from Chapter~3 against what was actually measured.}
+  \label{tab:results-vs-targets}
+  \centering
+  \small
+  \begin{tabular}{p{4.2cm}p{3cm}p{5.6cm}p{2.2cm}}
+    \toprule
+    Target (Chapter~3) & Original goal & What was measured & Met? \\
+    \midrule
+    FID (view translation) & $\leq$55 & 95.831 (Track~1, best CycleGAN checkpoint) & No \\
+    KID (view translation, all tracks) & not specified & see Section~\ref{sec:common-metrics-results} & Partial \\
+    Shadow-angle error & $<10^{\circ}$ & not evaluated (Section~\ref{sec:eval-extend}) & --- \\
+    Hapke BRDF residual & minimised & not evaluated; auxiliary network never built (Chapter~3, Section~\ref{sec:deviation-rationale}) & --- \\
+    Hallucination rate & $<5\%$ & not evaluated; auxiliary classifier never built & --- \\
+    VR render throughput & $>$72\,fps & not evaluated; Stage~3 out of scope (Section~\ref{sec:gs-decision}) & --- \\
+    HiRISE corpus size & 50{,}000 patches & 37{,}054 (Track~1); 1{,}513 geometry-render patches (Track~2) & Partial \\
+    Rover corpus size & 30{,}000 images & 20{,}417 (unpaired, Tracks~1--2); 27 real pairs (Track~3) & Partial \\
+    DTM estimator accuracy & not specified & RMSE 2.02\,m, 21 Gale patches (cf.\ 1.05\,m~\cite{tao2021madnet}) & New metric \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Read plainly, the project met none of Chapter~3's original numeric thresholds. Chapter~7's assessment against the original objectives argues that this table understates what was actually learned, since three of the four unmet metrics were never attempted because their prerequisite auxiliary networks were scoped out for stated reasons (Chapter~3, Section~\ref{sec:deviation-rationale}), not because they were attempted and failed, and the FID gap has a specific, evidenced architectural cause (Section~\ref{sec:track1}) rather than an unexplained shortfall. Both readings are reported here rather than only the more favourable one.

@@ -1,0 +1,31 @@
+\chapter{Conclusions}
+\label{ch:conclusions}
+
+\section{Assessment Against the Objectives}
+\label{sec:conclusions-objectives}
+
+Section~1.2 set out four objectives. Judged against them directly:
+
+\textbf{O1} (nadir super-resolution from coarser CTX/CaSSIS inputs) was not achieved. The co-registration pipeline it depends on reached a five-image smoke test and was formally scoped out (Chapter~6, Section~\ref{sec:diffusionsr-decision}) once it became clear that neither test site used in this project needed it: HiRISE covers Oxia Planum and Gale Crater natively.
+
+\textbf{O2} (unpaired nadir-to-perspective translation, physically consistent) was achieved in a different architectural form from the one proposed. A viewpoint-translating, texture-synthesising pipeline was built and evaluated end-to-end, and Chapter~5's results show it working: geometry-mediation demonstrably breaks the failure mode that blocked pure pixel-space translation, and the end-to-end chain shows the DTM estimator's error visibly reaching the final image rather than being absorbed unnoticed. Chapter~3, Section~\ref{sec:deviation-rationale} argues that this substitution was the correct response to what the project's own evidence showed, not a lowering of ambition; Chapter~5, Section~\ref{sec:results-vs-targets} reports plainly that its FID (95.8) still falls short of the original target (\,$\leq$55), by a margin traced to a specific, understood architectural limit of restyling-based translation rather than an unexplained shortfall.
+
+\textbf{O3} (real-time 3D Gaussian Splatting rendering at $\geq$72\,fps) was not achieved and was formally scoped out (Chapter~6, Section~\ref{sec:gs-decision}). No code exists for it, and no claim is made otherwise.
+
+\textbf{O4} (quantified fidelity and physical plausibility) was achieved partially. FID, KID, RMSE, SSIM, and PSNR were computed, and Chapter~5 reports every one of them, including where they fall short of target. Shadow-angle error, Hapke BRDF residual, and hallucination rate, the three metrics most directly tied to physical plausibility rather than perceptual similarity, were not computed, because two of the three depend on auxiliary networks this project did not build (Chapter~3, Section~\ref{sec:deviation-rationale}) and the third was judged too large an addition this close to submission (Chapter~6, Section~\ref{sec:eval-extend}).
+
+Two of four objectives were met in substance, one in a revised form with an explicit rationale for the revision, and two were formally and explicitly not attempted. That is a narrower final scope than the original proposal, arrived at deliberately rather than by running out of time on an unstated plan.
+
+\section{Reflection on Project Management}
+\label{sec:conclusions-management}
+
+The original plan assumed HiRISE and rover corpora that, once acquired, would train directly; in practice, two separate corpus-quality problems (a browse-resolution substitution bug, and a severe diversity collapse from an overly narrow fetch default) consumed time that the plan had allocated to Stage~2 architecture work, and were only found because CycleGAN's training behaviour was diagnosed rather than accepted at face value. That diagnosis, not any part of the original Gantt-level plan, is what actually drove the project's direction from roughly its midpoint onward: the geometry-mediated redesign exists because a specific, evidenced failure pointed at a specific cause, not because it was scheduled.
+
+This is a genuine deviation from the original plan's assumption that Stage~2 architecture work could begin once corpora were acquired. In hindsight, the corpus-diversity risk (a single fetch script defaulting to one region) was not one the original design or its risk assessment anticipated, and a corpus audit earlier in the timeline, before any training run, would have caught it without the cost of a full 50-epoch training run that produced an uninformative result. That audit habit was adopted for every corpus built afterward (the geometry corpus, the DTM estimator's training set, the pose-matched pairing corpus), each of which was checked for size, diversity, and degenerate content before being trained on, which is the direct, applied lesson from the earlier miss.
+
+Architecture and infrastructure decisions were made incrementally, each justified by evidence from the previous step (loss-weight tuning isolated the discriminator shortcut; geometry-mediation isolated the viewpoint-translation limit; real pose-pairing removed the premise for an unpaired-only architecture), rather than committed to upfront. This is a defensible way to manage a project whose central technical risk, whether any translation architecture could close a domain gap this large, was explicitly flagged as unresolved in the literature review (Chapter~2) before implementation began. It did mean deferring the reconciliation between the approved methodology and the system actually being built for longer than it should have been left implicit; Chapter~6 records that reconciliation now, in the project's own words, rather than leaving two chapters describing different systems.
+
+\section{Summary}
+\label{sec:conclusions-summary}
+
+This dissertation set out to close the nadir-to-perspective domain gap for Mars landing-site imagery using generative modelling, and to render the result for VR. What it delivers is a working, evaluated, geometry-mediated translation pipeline for the middle of that goal, real evidence for why that architecture replaced the one originally proposed, and an explicit account of what was cut and why, rather than left unstated. The FID gap against the original target, the small size of the real paired corpus, and the unbuilt physical-plausibility metrics are reported as open limitations, not hidden ones. Chapter~6 sets out the specific next steps that follow from each: implementing the physics-constrained bridge on top of the now-validated geometric intermediate, training the physics-informed ControlNet variant already designed, and extending the corpus and evaluation coverage this dissertation's own scope decisions left for future work.
