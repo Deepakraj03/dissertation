@@ -35,13 +35,15 @@ Track~1 and Track~2 share their loss-weight configuration ($\lambda_{\mathrm{cyc
 
 Every quantitative result in Chapter~5 is backed by a JSON file recording the metric value, sample sizes, checkpoint identifier, and a timestamp, rather than a number transcribed once and left unverifiable:
 
+\begin{sloppypar}
 \begin{itemize}
-  \item \texttt{CycleGAN/Data/eval/} \texttt{fid\_results.json} --- Track~1 FID.
-  \item \texttt{CycleGAN/Data/eval/} \texttt{kid\_results\_track1.json}, \texttt{kid\_results\_track2.json} --- Table~\ref{tab:common-metrics}'s KID values.
-  \item \texttt{ControlNet/Data/eval/} \texttt{mars\_model\_eval.json} --- Track~3 KID/SSIM/PSNR.
-  \item \texttt{ControlNet/Data/eval/} \texttt{dtm\_estimator\_eval.json} --- DTM estimator RMSE.
-  \item \texttt{ControlNet/Data/eval/} \texttt{e2e\_pipeline\_metrics.json} --- Table~\ref{tab:e2e-metrics}'s end-to-end SSIM/PSNR/LPIPS values.
+  \item \texttt{CycleGAN/Data/eval/} \texttt{fid\_results.json}: Track~1 FID.
+  \item \texttt{CycleGAN/Data/eval/} \texttt{kid\_results\_track1.json}, \texttt{kid\_results\_track2.json}: Table~\ref{tab:common-metrics}'s KID values.
+  \item \texttt{ControlNet/Data/eval/} \texttt{mars\_model\_eval.json}: Track~3 KID/SSIM/PSNR.
+  \item \texttt{ControlNet/Data/eval/} \texttt{dtm\_estimator\_eval.json}: DTM estimator RMSE.
+  \item \texttt{ControlNet/Data/eval/} \texttt{e2e\_pipeline\_metrics.json}: Table~\ref{tab:e2e-metrics}'s end-to-end SSIM/PSNR/LPIPS values.
 \end{itemize}
+\end{sloppypar}
 
 \section{Infrastructure}
 \label{sec:appendix-infra}

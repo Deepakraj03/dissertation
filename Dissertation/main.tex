@@ -7,6 +7,8 @@
 \usepackage[tmargin=1in,bmargin=1in,lmargin=1.38in,rmargin=0.79in]{geometry} % Surrey Normal margins
 
 \usepackage{times} % Adobe Times Roman (or equivalent) as default font
+\usepackage{microtype} % Character protrusion/font expansion to fix right-margin overfull hboxes
+\setlength{\emergencystretch}{3em} % Extra line-breaking slack to eliminate remaining overfull hboxes
 \usepackage{epsfig} % Include Encapsulated PostScript in LaTeX document
 \usepackage{fancyhdr} % Extensive control of page headers and footers
 \usepackage{longtable} % Allow tables to flow over page boundaries
