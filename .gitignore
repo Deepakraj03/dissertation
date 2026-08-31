@@ -94,6 +94,7 @@ Methodology/*.blg
 Methodology/*.log
 # Dissertation source and compiled PDF are not published to this repo.
 Dissertation/
+/images/
 
 # Ad-hoc image review dumps (scratch output for visually spot-checking a
 # model's generated samples, not a tracked project artifact).
