@@ -73,13 +73,14 @@ def main():
     parser.add_argument("--input-dir", type=str, default=str(DEFAULT_INPUT_DIR))
     parser.add_argument("--output-dir", type=str, default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
     pipe = load_pipeline(Path(args.controlnet_checkpoint), args.base_model, device)
-    count = generate_all(pipe, Path(args.input_dir), Path(args.output_dir), limit=args.limit)
+    count = generate_all(pipe, Path(args.input_dir), Path(args.output_dir), seed=args.seed, limit=args.limit)
     print(f"Generated {count} translations -> {args.output_dir}")
 
 

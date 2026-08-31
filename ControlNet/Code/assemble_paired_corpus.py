@@ -7,6 +7,8 @@ photo per group."""
 
 import argparse
 import csv
+import dataclasses
+import json
 import random
 import shutil
 import sys
@@ -23,6 +25,7 @@ from dtm_coverage import DtmCoverageRecord, query_dtm_coverage, signed_lon_to_0_
 from dtm_arrays import load_dtm_arrays
 from dtm_geo_lookup import (
     find_covering_dtm, latlon_to_dtm_pixel, compass_heading_to_render_heading,
+    _parse_wkt_polygon, _point_in_polygon,
 )
 from download_hirise import REGIONS
 from fetch_hirise_dtm import fetch_dtm_and_orthos
@@ -101,9 +104,30 @@ def fetch_target_photo(product_id: str, sol: int, dest_path: Path) -> bool:
 def group_products_by_covering_dtm(poses: list[RoverPose],
                                    dtm_records: list[DtmCoverageRecord],
                                    ) -> dict[str, list[RoverPose]]:
+    """Same real point-in-polygon coverage test as find_covering_dtm
+    (dtm_geo_lookup.py), but each record's WKT footprint is parsed once
+    here rather than once per (pose, record) pair — found 2026-08-31 to be
+    the dominant real cost of this step at dense-sampling scale (20,281
+    poses x up to 25 DTMs was re-parsing the same handful of polygons
+    roughly half a million times); does not change dtm_geo_lookup.py's own
+    shared find_covering_dtm, which other callers still use unmodified."""
+    parsed_records = [
+        (record, _parse_wkt_polygon(record.footprint_wkt)) if record.footprint_wkt
+        else (record, None)
+        for record in dtm_records
+    ]
     grouped: dict[str, list[RoverPose]] = {}
     for pose in poses:
-        record = find_covering_dtm(pose.latitude, pose.longitude, dtm_records)
+        record = None
+        for candidate, polygon in parsed_records:
+            if polygon is not None:
+                if _point_in_polygon(pose.longitude, pose.latitude, polygon):
+                    record = candidate
+                    break
+            elif (candidate.min_lat <= pose.latitude <= candidate.max_lat and
+                    candidate.min_lon <= pose.longitude <= candidate.max_lon):
+                record = candidate
+                break
         if record is None:
             continue
         grouped.setdefault(record.product_id, []).append(pose)
@@ -113,6 +137,7 @@ def group_products_by_covering_dtm(poses: list[RoverPose],
 def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
                       scratch_dir: Path, out_dir: Path,
                       max_pitch_deg: float = MAX_ABS_PITCH_DEG,
+                      entropy_th: float = ENTROPY_TH,
                       source_mission: str = "MSL") -> dict:
     """Download dtm_record's DTM+ortho once, render every pose in poses
     from its real (row, col, heading) on that DTM, fetch each pose's real
@@ -144,23 +169,28 @@ def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
 
         out_dir.mkdir(parents=True, exist_ok=True)
         saved_ids = []
+        rejections = {"pitch": 0, "render_failed": 0, "low_entropy": 0, "fetch_failed": 0}
         for pose in poses:
             if abs(pose.pitch_deg) > max_pitch_deg:
+                rejections["pitch"] += 1
                 continue
             condition_map = render_pose_condition_map(dtm_path, arrays, transform, pose)
             if condition_map is None:
+                rejections["render_failed"] += 1
                 continue
 
-            if ground_entropy(condition_map) < ENTROPY_TH:
+            if ground_entropy(condition_map) < entropy_th:
                 # Uninformative render: either genuine sky, or real terrain
                 # sitting in a gap the chosen ortho doesn't cover (both
                 # paint as sky_value=0 — see dtm_arrays.py's ortho-resample
                 # nodata fill). Skip before spending a network call on the
                 # target photo for a candidate we're about to discard.
+                rejections["low_entropy"] += 1
                 continue
 
             target_path = out_dir / f"{pose.product_id}_target.jpg"
             if not fetch_target_photo(pose.product_id, pose.sol, target_path):
+                rejections["fetch_failed"] += 1
                 continue
 
             save_patch(condition_map, out_dir / f"{pose.product_id}_condition.png")
@@ -168,7 +198,8 @@ def process_dtm_group(dtm_record: DtmCoverageRecord, poses: list[RoverPose],
 
         return {"product_id": dtm_record.product_id, "status": "ok",
                "pairs_saved": len(saved_ids), "saved_ids": saved_ids,
-               "source_mission": source_mission}
+               "source_mission": source_mission, "rejections": rejections,
+               "candidates": len(poses)}
     finally:
         Path(fetch_result.get("dtm_path", expected_dtm_path)).unlink(missing_ok=True)
         ortho_paths_to_clean = list(fetch_result.get("ortho_paths", {}).values()) \
@@ -257,11 +288,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-pitch-deg", type=float, default=MAX_ABS_PITCH_DEG,
                         help="Max abs(pitch_deg) for a pose to be rendered "
                              "(see MAX_ABS_PITCH_DEG's module comment)")
+    parser.add_argument("--entropy-th", type=float, default=ENTROPY_TH,
+                        help="Minimum ground_entropy (bits) for a rendered "
+                             "condition map to be kept (preprocess.py default: "
+                             f"{ENTROPY_TH})")
+    parser.add_argument("--output-dir", type=Path, default=None,
+                        help="Override the default "
+                             "Data/processed/paired_controlnet_corpus output "
+                             "location, so a filter-tuning experiment doesn't "
+                             "overwrite the corpus currently in use.")
     # Oxia Planum is explicitly out of scope — no real rover target photos
     # exist there, and this pipeline requires paired condition maps + real targets.
     parser.add_argument("--region", type=str, default="gale_crater",
                         choices=[k for k in REGIONS if k != "oxia_planum"],
                         help="REGIONS key to query DTM coverage for")
+    parser.add_argument("--cache-poses-to", type=Path, default=None,
+                        help="Write gathered candidate poses to this JSON path "
+                             "after the (network-bound) gather step, so a later "
+                             "run can replay filter changes via --load-poses-from "
+                             "without re-fetching every label over the network.")
+    parser.add_argument("--load-poses-from", type=Path, default=None,
+                        help="Load candidate poses from a JSON file written by a "
+                             "prior --cache-poses-to run instead of gathering them "
+                             "from the network. --sols/--per-sol are ignored when set.")
     return parser
 
 
@@ -304,16 +353,35 @@ def main():
         sys.exit(1)
     localization = parse_localization_csv(csv_path)
 
-    print(f"Gathering candidate poses across sols {args.sols}…")
-    poses = gather_candidate_poses(args.sols, args.per_sol, localization)
-    print(f"{len(poses)} candidate poses parsed")
+    if args.load_poses_from is not None:
+        print(f"Loading cached candidate poses from {args.load_poses_from}…")
+        raw = json.loads(args.load_poses_from.read_text())
+        poses = [RoverPose(**p) for p in raw]
+        print(f"{len(poses)} candidate poses loaded (no network fetch)")
+    else:
+        print(f"Gathering candidate poses across sols {args.sols}…")
+        poses = gather_candidate_poses(args.sols, args.per_sol, localization)
+        print(f"{len(poses)} candidate poses parsed")
+        if args.cache_poses_to is not None:
+            args.cache_poses_to.parent.mkdir(parents=True, exist_ok=True)
+            args.cache_poses_to.write_text(
+                json.dumps([dataclasses.asdict(p) for p in poses]))
+            print(f"Cached {len(poses)} poses to {args.cache_poses_to}")
 
     grouped = group_products_by_covering_dtm(poses, dtm_records)
     print(f"{len(grouped)} DTM group(s) with at least one covered pose")
 
+    out_dir = args.output_dir if args.output_dir is not None else (
+        root / "Data" / "processed" / "paired_controlnet_corpus")
     scratch_dir = root / "Data" / "_paired_corpus_scratch"
-    staging_dir = root / "Data" / "processed" / "paired_controlnet_corpus" / "_staging"
-    out_dir = root / "Data" / "processed" / "paired_controlnet_corpus"
+    staging_dir = out_dir / "_staging"
+    # Clear any leftover staging content from a prior run (e.g. one that
+    # crashed partway through) before writing into it -- found 2026-08-31
+    # to otherwise silently mix stale pairs from an interrupted run into a
+    # fresh one's output, since split_pairs_and_move only clears the final
+    # train/val/test dirs, not this intermediate directory.
+    if staging_dir.exists():
+        shutil.rmtree(staging_dir)
 
     manifest = []
     saved_ids = []
@@ -321,8 +389,10 @@ def main():
         record = next(r for r in dtm_records if r.product_id == dtm_product_id)
         print(f"\nProcessing DTM {dtm_product_id} ({len(group_poses)} candidate poses)…")
         result = process_dtm_group(record, group_poses, scratch_dir, staging_dir,
-                                   max_pitch_deg=args.max_pitch_deg)
-        print(f"  {result['status']} — {result.get('pairs_saved', 0)} pairs")
+                                   max_pitch_deg=args.max_pitch_deg,
+                                   entropy_th=args.entropy_th)
+        print(f"  {result['status']} — {result.get('pairs_saved', 0)} pairs"
+              f"  (rejections: {result.get('rejections', {})})")
         manifest.append(result)
         saved_ids.extend(result.get("saved_ids", []))
 

@@ -1,7 +1,5 @@
-# Dev tooling local-only settings (machine-specific permission grants)
+# Local dev-tool settings and runtime lock files (machine-specific, not project content)
 .devtool/settings.local.json
-
-# Dev tooling session-runtime lock files (not project content)
 .devtool/scheduled_tasks.lock
 
 # LibreOffice lock files
@@ -18,7 +16,6 @@ venv/
 
 # Generated data — regenerate via:
 #   CycleGAN/Code/download_hirise.py, download_rover.py, preprocess.py
-#   DiffusionSR/Code/coregister_ctx_hirise.py (needs HiRISE index + CTX tiles)
 # Exceptions: training_log.csv, Data/eval/fid_results.json, and dtm_coverage JSON
 # are tiny provenance records (KBs, not bulk data) and ARE tracked.
 CycleGAN/Data/*
@@ -28,7 +25,9 @@ CycleGAN/Data/eval/*
 !CycleGAN/Data/HiRISE_index/
 CycleGAN/Data/HiRISE_index/*
 !CycleGAN/Data/HiRISE_index/dtm_coverage_*.json
-DiffusionSR/Data/
+
+# Early-stage nadir super-resolution work, not published to this repo.
+DiffusionSR/
 
 # Training artifacts (move machine-to-machine via rsync, not git)
 CycleGAN/checkpoints/
@@ -93,12 +92,9 @@ Methodology/*.aux
 Methodology/*.bbl
 Methodology/*.blg
 Methodology/*.log
-Dissertation/*.aux
-Dissertation/chapters/*.aux
-Dissertation/*.bbl
-Dissertation/*.blg
-Dissertation/*.log
-Dissertation/*.out
-Dissertation/*.toc
-Dissertation/*.lof
-Dissertation/*.synctex.gz
+# Dissertation source and compiled PDF are not published to this repo.
+Dissertation/
+
+# Ad-hoc image review dumps (scratch output for visually spot-checking a
+# model's generated samples, not a tracked project artifact).
+ckpt100_sample_review/
